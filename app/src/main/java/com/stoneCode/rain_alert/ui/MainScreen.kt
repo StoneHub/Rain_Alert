@@ -1,6 +1,5 @@
 package com.stoneCode.rain_alert.ui
 
-import android.content.Context
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -27,7 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.stoneCode.rain_alert.viewmodel.WeatherViewModel
+import com.stonecode.rain_alert.viewmodel.WeatherViewModel
 
 @Composable
 fun MainScreen(
@@ -38,7 +37,7 @@ fun MainScreen(
     onOpenWeatherWebsiteClick: () -> Unit,
     weatherViewModel: WeatherViewModel = viewModel()
 ) {
-    val context = LocalContext.current
+    LocalContext.current
     val isServiceRunning by weatherViewModel.isServiceRunning.observeAsState(false)
     val lastUpdateTime by weatherViewModel.lastUpdateTime.observeAsState("")
     val weatherData by weatherViewModel.weatherData.observeAsState("Loading...")
@@ -54,7 +53,7 @@ fun MainScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 Log.d("MainScreen", "Lifecycle Event: ON_RESUME")
-                weatherViewModel.updateWeatherStatus(context)
+                weatherViewModel.updateWeatherStatus()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -112,7 +111,7 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            WeatherUpdateSection(weatherData, lastUpdateTime, weatherViewModel, context)
+            WeatherUpdateSection(weatherData, lastUpdateTime, weatherViewModel)
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -140,8 +139,7 @@ fun ServiceStatusIndicator(isServiceRunning: Boolean) {
 fun WeatherUpdateSection(
     weatherData: String,
     lastUpdateTime: String,
-    weatherViewModel: WeatherViewModel,
-    context: Context
+    weatherViewModel: WeatherViewModel
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Log.d("WeatherUpdateSection", "Weather Data: $weatherData")
@@ -165,7 +163,7 @@ fun WeatherUpdateSection(
 
         Button(onClick = {
             Log.d("WeatherUpdateSection", "Refresh Weather Button Clicked")
-            weatherViewModel.updateWeatherStatus(context)
+            weatherViewModel.updateWeatherStatus()
         }) {
             Text("Refresh Weather")
         }

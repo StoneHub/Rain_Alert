@@ -1,3 +1,4 @@
+// file: app/src/main/java/com/stoneCode/rain_alert/service/RainService.kt
 package com.stoneCode.rain_alert.service
 
 import android.Manifest
@@ -143,7 +144,7 @@ class RainService : Service() {
         }
     }
 
-    private fun isRaining(): Boolean {
+    private suspend fun isRaining(): Boolean {
         if (ContextCompat.checkSelfPermission(
                 this,
                 Manifest.permission.ACCESS_FINE_LOCATION
@@ -158,7 +159,7 @@ class RainService : Service() {
         }
     }
 
-    private fun isFreezing(): Boolean {
+    private suspend fun isFreezing(): Boolean {
         val isFreezing = weatherRepository.checkForFreezeWarning()
         Log.d("RainService", "isFreezing check: $isFreezing")
         return isFreezing

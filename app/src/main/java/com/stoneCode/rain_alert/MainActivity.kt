@@ -14,13 +14,15 @@ import androidx.core.content.ContextCompat
 import android.content.Intent
 import android.widget.Toast
 import android.net.Uri
+import androidx.annotation.RequiresApi
 import com.stoneCode.rain_alert.service.RainService
 import com.stoneCode.rain_alert.ui.MainScreen
-import com.stoneCode.rain_alert.viewmodel.WeatherViewModel
+import com.stonecode.rain_alert.viewmodel.WeatherViewModel
 
 class MainActivity : ComponentActivity() {
     private lateinit var weatherViewModel: WeatherViewModel
 
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -63,6 +65,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         weatherViewModel = WeatherViewModel(application) // Initialize here
@@ -112,7 +115,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         weatherViewModel.registerServiceStatusListener()
-        weatherViewModel.updateWeatherStatus(this)
+        weatherViewModel.updateWeatherStatus()
     }
 
     override fun onPause() {
@@ -121,6 +124,7 @@ class MainActivity : ComponentActivity() {
     }
 
 
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun hasRequiredPermissions(): Boolean {
         val fineLocationGranted = ContextCompat.checkSelfPermission(
             this,
@@ -142,6 +146,7 @@ class MainActivity : ComponentActivity() {
         return fineLocationGranted && foregroundServiceLocationGranted && postNotificationsGranted
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun requestRequiredPermissions() {
         val permissionsToRequest = mutableListOf<String>()
         if (ContextCompat.checkSelfPermission(
@@ -156,7 +161,9 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.FOREGROUND_SERVICE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            permissionsToRequest.add(Manifest.permission.FOREGROUND_SERVICE_LOCATION)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                permissionsToRequest.add(Manifest.permission.FOREGROUND_SERVICE_LOCATION)
+            }
         }
         if (ContextCompat.checkSelfPermission(
                 this,
@@ -169,7 +176,9 @@ class MainActivity : ComponentActivity() {
         Log.d("MainActivity", "Requesting permissions: $permissionsToRequest")
 
         if (permissionsToRequest.isNotEmpty()) {
-            requestPermissionLauncher.launch(permissionsToRequest.toTypedArray())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                requestPermissionLauncher.launch(permissionsToRequest.toTypedArray())
+            }
         }
     }
 

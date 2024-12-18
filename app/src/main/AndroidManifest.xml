@@ -23,13 +23,14 @@
         android:theme="@style/Theme.Rain_Alert"
         tools:targetApi="31">
 
+
         <service
-            android:name=".service.RainService"
+            android:name="com.stoneCode.rain_alert.service.RainService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="location" />
 
-        <receiver android:name=".service.AlarmReceiver" android:exported="false">
+        <receiver android:name="com.stoneCode.rain_alert.service.AlarmReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="com.stonecode.rain_alert.RAIN_ALARM" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
@@ -37,7 +38,7 @@
         </receiver>
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.stoneCode.rain_alert.MainActivity"
             android:exported="true"
             android:theme="@style/Theme.Rain_Alert">
             <intent-filter>

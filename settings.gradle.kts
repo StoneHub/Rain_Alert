@@ -1,3 +1,5 @@
+import org.gradle.api.initialization.resolve.RepositoriesMode.*
+
 pluginManagement {
     repositories {
         google {
@@ -11,14 +13,17 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+//noinspection UnstableApiUsage
 dependencyResolutionManagement {
+    //noinspection UnstableApiUsage
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    //noinspection UnstableApiUsage
     repositories {
         google()
         mavenCentral()
     }
 }
 
-rootProject.name = "Rain_Alert"
+rootProject.name = "Rain Alert"
 include(":app")
  
