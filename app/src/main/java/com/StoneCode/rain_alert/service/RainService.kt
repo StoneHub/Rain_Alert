@@ -3,6 +3,7 @@ package com.StoneCode.rain_alert.service
 import android.Manifest
 import android.app.AlarmManager
 import android.app.Notification
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
@@ -13,7 +14,10 @@ import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.StoneCode.rain_alert.MainActivity
+import com.StoneCode.rain_alert.R
 import com.StoneCode.rain_alert.repository.WeatherRepository
 import com.StoneCode.rain_alert.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +26,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Calendar
+
+interface ServiceStatusListener {
+    fun onServiceStatusChanged(isRunning: Boolean)
+}
 
 class RainService : Service() {
 
@@ -37,6 +45,15 @@ class RainService : Service() {
 
     companion object {
         var isRunning = false
+        private var statusListener: ServiceStatusListener? = null
+
+        fun setServiceStatusListener(listener: ServiceStatusListener) {
+            statusListener = listener
+        }
+
+        fun clearServiceStatusListener() {
+            statusListener = null
+        }
     }
 
     override fun onCreate() {
@@ -44,6 +61,7 @@ class RainService : Service() {
         weatherRepository = WeatherRepository(this)
         notificationHelper = NotificationHelper(this)
         isRunning = true
+        statusListener?.onServiceStatusChanged(true)
         Log.d("RainService", "RainService created")
     }
 
@@ -58,7 +76,14 @@ class RainService : Service() {
                 startFreezeCheck()
             }
             "SIMULATE_RAIN" -> simulateRain()
-            "STOP_SERVICE" -> stopSelf()
+            "SIMULATE_FREEZE" -> {
+                Log.d("RainService", "SIMULATE_FREEZE intent received")
+                simulateFreeze()
+            }
+            "STOP_SERVICE" -> {
+                Log.d("RainService", "STOP_SERVICE intent received")
+                stopSelf() // Stop the service
+            }
             else -> {
                 startRainCheck()
                 startFreezeCheck()
@@ -69,14 +94,31 @@ class RainService : Service() {
     }
 
     private fun createForegroundNotification(): Notification {
-        val notification = notificationHelper.createNotification(
-            "Rain Alert Service",
-            "Monitoring weather for rain..."
+        // Intent to open MainActivity when notification is clicked
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+
+        // Use FLAG_IMMUTABLE for PendingIntent
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE
         )
-        Log.d("RainService", "Foreground notification created")
+
+        // Build the notification directly using NotificationCompat.Builder
+        val notification = NotificationCompat.Builder(this, notificationHelper.CHANNEL_ID) // Use CHANNEL_ID from NotificationHelper
+            .setSmallIcon(R.drawable.ic_launcher_foreground) // Replace with your actual icon
+            .setContentTitle("Rain Alert Service")
+            .setContentText("Monitoring weather for rain...")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent) // Set the PendingIntent here
+            .build()
+
+        Log.d("RainService", "Foreground notification created with intent to open MainActivity")
         return notification
     }
-
     private fun startRainCheck() {
         serviceScope.launch {
             while (true) {
@@ -129,9 +171,13 @@ class RainService : Service() {
         }
     }
 
+    private fun simulateFreeze() {
+        sendFreezeWarningNotification()
+        Log.d("RainService", "Freeze simulation triggered")
+    }
+
     private fun sendRainNotification() {
-        val notification =
-            notificationHelper.createNotification("Rain Alert!", "It's starting to rain!")
+        val notification = notificationHelper.createRainNotification() // Use the new function
         notificationHelper.sendNotification(NOTIFICATION_ID, notification)
         Log.d("RainService", "Rain notification sent")
     }
@@ -150,7 +196,14 @@ class RainService : Service() {
         super.onDestroy()
         serviceJob.cancel()
         isRunning = false
+        statusListener?.onServiceStatusChanged(false)
         Log.d("RainService", "RainService destroyed")
+
+        // Get the NotificationManager
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // Cancel all notifications
+        notificationManager.cancelAll()
     }
 
     private fun scheduleAlarm() {

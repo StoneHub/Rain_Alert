@@ -33,6 +33,8 @@ import com.StoneCode.rain_alert.viewmodel.WeatherViewModel
 @Composable
 fun MainScreen(
     onStartServiceClick: () -> Unit,
+    onStopServiceClick: () -> Unit, // Add this
+    onSimulateFreezeClick: () -> Unit, // Add this
     onSimulateRainClick: () -> Unit,
     onOpenWeatherWebsiteClick: () -> Unit,
     weatherViewModel: WeatherViewModel = viewModel()
@@ -59,6 +61,7 @@ fun MainScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            weatherViewModel.stopServiceChecker() // Stop checking when the screen is disposed
         }
     }
 
@@ -73,13 +76,18 @@ fun MainScreen(
         ) {
             Button(
                 onClick = {
-                    onStartServiceClick()
-                    Log.d("MainScreen", "Start Service Button Clicked")
+                    if (isServiceRunning) {
+                        onStopServiceClick() // Call a new function to stop the service
+                        Log.d("MainScreen", "Stop Service Button Clicked")
+                    } else {
+                        onStartServiceClick()
+                        Log.d("MainScreen", "Start Service Button Clicked")
+                    }
                 },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (isServiceRunning) Color.Green else Color.Red
                 )
-            ){
+            ) {
                 Text(if (isServiceRunning) "Stop Service" else "Start Service")
             }
 
@@ -90,6 +98,13 @@ fun MainScreen(
                 Log.d("MainScreen", "Simulate Rain Button Clicked")
             }) {
                 Text("Simulate Rain")
+            }
+
+            Button(onClick = {
+                onSimulateFreezeClick()
+                Log.d("MainScreen", "Simulate Freeze Button Clicked")
+            }) {
+                Text("Simulate Freeze")
             }
 
             Spacer(modifier = Modifier.height(16.dp))

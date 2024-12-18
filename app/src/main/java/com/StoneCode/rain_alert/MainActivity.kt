@@ -79,11 +79,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        weatherViewModel = WeatherViewModel(application)
+        weatherViewModel = WeatherViewModel(application) // Initialize here
         enableEdgeToEdge()
         setContent {
             Rain_AlertTheme {
-                val weatherViewModel: WeatherViewModel = viewModel()
+                // val weatherViewModel: WeatherViewModel = viewModel() // Remove this line
                 MainScreen(
                     onStartServiceClick = {
                         Log.d("MainActivity", "Start Service button clicked")
@@ -93,19 +93,47 @@ class MainActivity : ComponentActivity() {
                             requestRequiredPermissions()
                         }
                     },
+                    onStopServiceClick = {
+                        Log.d("MainActivity", "Stopping RainService")
+                        val stopIntent = Intent(this, RainService::class.java)
+                        stopIntent.action = "STOP_SERVICE"
+                        stopService(stopIntent)
+                    },
                     onSimulateRainClick = {
                         Log.d("MainActivity", "Simulate Rain button clicked")
                         simulateRain()
+                    },
+                    onSimulateFreezeClick = {
+                        Log.d("MainActivity", "Simulating Freeze Warning")
+                        val simulateFreezeIntent = Intent(this, RainService::class.java)
+                        simulateFreezeIntent.action = "SIMULATE_FREEZE"
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            startForegroundService(simulateFreezeIntent)
+                        } else {
+                            startService(simulateFreezeIntent)
+                        }
                     },
                     onOpenWeatherWebsiteClick = {
                         Log.d("MainActivity", "Open Weather Website button clicked")
                         openWeatherWebsite()
                     },
-                    weatherViewModel = weatherViewModel
+                    weatherViewModel = weatherViewModel // Pass it here
                 )
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        weatherViewModel.registerServiceStatusListener()
+        weatherViewModel.updateWeatherStatus(this)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        weatherViewModel.unregisterServiceStatusListener()
+    }
+
 
     private fun hasRequiredPermissions(): Boolean {
         val fineLocationGranted = ContextCompat.checkSelfPermission(
