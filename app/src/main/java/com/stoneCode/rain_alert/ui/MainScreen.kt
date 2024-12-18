@@ -1,4 +1,4 @@
-// Redesigned MainScreen with support for background image
+// Redesigned MainScreen with enhanced title positioning and spacing
 package com.stoneCode.rain_alert.ui
 
 import androidx.compose.foundation.Image
@@ -68,20 +68,40 @@ fun MainScreen(
                         .fillMaxSize()
                         .padding(innerPadding),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceEvenly
+                    verticalArrangement = Arrangement.Top
                 ) {
+                    // App Title
+                    Text(
+                        text = "Rain Alert",
+                        style = MaterialTheme.typography.displaySmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "by StoneCode",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.Light
+                        ),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
                     // Weather Banner Section
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 32.dp) // Adjust padding as needed
+                            .padding(horizontal = 32.dp)
                             .background(MaterialTheme.colorScheme.secondary, shape = RoundedCornerShape(12.dp))
                             .padding(16.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "Weather Data",
+                                text = "Latest Weather Data",
                                 style = MaterialTheme.typography.titleLarge.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSecondary
@@ -104,11 +124,11 @@ fun MainScreen(
                         }
                     }
 
-
                     // Control Buttons Section
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(top = 16.dp)
                     ) {
                         ActionButton(
                             text = if (isServiceRunning) "Stop Service" else "Start Service",

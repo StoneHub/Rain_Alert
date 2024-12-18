@@ -97,12 +97,9 @@ class RainService : Service() {
     }
 
     private fun createForegroundNotification(): Notification {
-        // Intent to open MainActivity when notification is clicked
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
-
-        // Use FLAG_IMMUTABLE for PendingIntent
         val pendingIntent = PendingIntent.getActivity(
             this,
             0,
@@ -110,18 +107,18 @@ class RainService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Build the notification directly using NotificationCompat.Builder
-        val notification = NotificationCompat.Builder(this, notificationHelper.CHANNEL_ID) // Use CHANNEL_ID from NotificationHelper
-            .setSmallIcon(R.drawable.ic_launcher_foreground) // Replace with your actual icon
+        val notification = NotificationCompat.Builder(this, notificationHelper.FOREGROUND_SERVICE_CHANNEL_ID) // Use the new channel ID
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle("Rain Alert Service")
             .setContentText("Monitoring weather for rain...")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(pendingIntent) // Set the PendingIntent here
+            .setPriority(NotificationCompat.PRIORITY_LOW) // Also set to low priority
+            .setContentIntent(pendingIntent)
             .build()
 
         Log.d("RainService", "Foreground notification created with intent to open MainActivity")
         return notification
     }
+
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun startRainCheck() {
         serviceScope.launch {
