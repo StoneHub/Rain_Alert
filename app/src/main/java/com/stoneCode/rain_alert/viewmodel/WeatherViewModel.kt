@@ -1,4 +1,4 @@
-package com.StoneCode.rain_alert.viewmodel
+package com.stoneCode.rain_alert.viewmodel
 
 import android.app.Application
 import android.content.Context
@@ -6,8 +6,8 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import com.StoneCode.rain_alert.service.RainService
-import com.StoneCode.rain_alert.service.ServiceStatusListener
+import com.stoneCode.rain_alert.service.RainService
+import com.stoneCode.rain_alert.service.ServiceStatusListener
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

@@ -1,4 +1,4 @@
-package com.StoneCode.rain_alert.repository
+package com.stoneCode.rain_alert.repository
 
 import android.content.Context
 import android.location.Location

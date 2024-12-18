@@ -1,4 +1,4 @@
-package com.StoneCode.rain_alert
+package com.stoneCode.rain_alert
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -7,30 +7,16 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import android.util.Log
-import com.StoneCode.rain_alert.ui.theme.Rain_AlertTheme
-import androidx.compose.material3.Button
+import com.stoneCode.rain_alert.ui.theme.Rain_AlertTheme
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.ui.Alignment
 import androidx.core.content.ContextCompat
 import android.content.Intent
-import androidx.compose.runtime.*
 import android.widget.Toast
-import androidx.compose.ui.platform.LocalContext
 import android.net.Uri
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
-import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.StoneCode.rain_alert.service.RainService
-import com.StoneCode.rain_alert.ui.MainScreen
-import com.StoneCode.rain_alert.viewmodel.WeatherViewModel
+import com.stoneCode.rain_alert.service.RainService
+import com.stoneCode.rain_alert.ui.MainScreen
+import com.stoneCode.rain_alert.viewmodel.WeatherViewModel
 
 class MainActivity : ComponentActivity() {
     private lateinit var weatherViewModel: WeatherViewModel

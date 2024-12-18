@@ -1,4 +1,4 @@
-package com.StoneCode.rain_alert.service
+package com.stoneCode.rain_alert.service
 
 import android.Manifest
 import android.app.AlarmManager
@@ -16,10 +16,10 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.StoneCode.rain_alert.MainActivity
 import com.StoneCode.rain_alert.R
-import com.StoneCode.rain_alert.repository.WeatherRepository
-import com.StoneCode.rain_alert.util.NotificationHelper
+import com.stoneCode.rain_alert.MainActivity
+import com.stoneCode.rain_alert.repository.WeatherRepository
+import com.stoneCode.rain_alert.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

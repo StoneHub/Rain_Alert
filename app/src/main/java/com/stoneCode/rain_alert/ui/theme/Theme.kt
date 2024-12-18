@@ -1,6 +1,5 @@
-package com.StoneCode.rain_alert.ui.theme
+package com.stoneCode.rain_alert.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme

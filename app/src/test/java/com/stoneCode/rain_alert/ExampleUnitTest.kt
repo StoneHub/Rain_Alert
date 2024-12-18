@@ -1,4 +1,4 @@
-package com.StoneCode.rain_alert
+package com.stoneCode.rain_alert
 
 import org.junit.Test
 

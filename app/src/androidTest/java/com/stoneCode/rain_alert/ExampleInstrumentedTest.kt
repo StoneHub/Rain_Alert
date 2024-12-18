@@ -1,4 +1,4 @@
-package com.StoneCode.rain_alert
+package com.stoneCode.rain_alert
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4

@@ -1,4 +1,4 @@
-package com.StoneCode.rain_alert.service
+package com.stoneCode.rain_alert.service
 
 import android.content.BroadcastReceiver
 import android.content.Context

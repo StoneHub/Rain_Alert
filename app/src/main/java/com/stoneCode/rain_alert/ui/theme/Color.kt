@@ -1,4 +1,4 @@
-package com.StoneCode.rain_alert.ui.theme
+package com.stoneCode.rain_alert.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
