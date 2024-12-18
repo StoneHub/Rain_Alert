@@ -1,14 +1,14 @@
 // file: app/src/main/java/com/stoneCode/rain_alert/viewmodel/WeatherViewModel.kt
-package com.stonecode.rain_alert.viewmodel
+package com.stoneCode.rain_alert.viewmodel
 
 import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import com.stoneCode.rain_alert.service.RainService
 import com.stoneCode.rain_alert.service.ServiceStatusListener
 import com.stoneCode.rain_alert.repository.WeatherRepository
-import com.stoneCode.rain_alert.service.RainService
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -55,15 +55,9 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
 
         // Fetch real weather data from the repository
         viewModelScope.launch {
-            val isRaining = weatherRepository.checkForRain()
-            val isFreezing = weatherRepository.checkForFreezeWarning()
-            val weatherStatus = when {
-                isRaining -> "Raining\nAPI: NWS\n"
-                isFreezing -> "Freezing\nAPI: NWS\n"
-                else -> "Not Raining\nAPI: NWS\n"
-            }
-            weatherData.postValue(weatherStatus)
-            Log.d("WeatherViewModel", "Weather data updated: $weatherStatus")
+            val currentWeather = weatherRepository.getCurrentWeather()
+            weatherData.postValue(currentWeather)
+            Log.d("WeatherViewModel", "Weather data updated: $currentWeather")
         }
     }
 

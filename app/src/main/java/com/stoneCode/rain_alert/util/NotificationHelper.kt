@@ -1,3 +1,4 @@
+// file: app/src/main/java/com/stoneCode/rain_alert/util/NotificationHelper.kt
 package com.stoneCode.rain_alert.util
 
 import android.Manifest
@@ -11,6 +12,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -51,15 +53,15 @@ class NotificationHelper(private val context: Context) {
         }
     }
 
-    fun createRainNotification(): Notification {
-        // Create an Intent to open a weather website
-        val websiteUrl = "https://www.weather.gov/wrh/hourly" // Replace with your preferred hourly weather URL for rain alerts
+    fun createRainNotification(latitude: Double, longitude: Double): Notification {
+        // Create a dynamic NWS URL based on latitude and longitude
+        val websiteUrl = "https://forecast.weather.gov/MapClick.php?lat=$latitude&lon=$longitude"
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(websiteUrl))
         val pendingIntent: PendingIntent = PendingIntent.getActivity(
             context,
             0,
             intent,
-            PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
@@ -72,15 +74,15 @@ class NotificationHelper(private val context: Context) {
             .build()
     }
 
-    fun createFreezeWarningNotification(): Notification {
-        // Create an Intent to open a weather website
-        val websiteUrl = "https://www.weather.gov/wrh/hourly" // Replace with your preferred hourly weather URL
+    fun createFreezeWarningNotification(latitude: Double, longitude: Double): Notification {
+        // Create a dynamic NWS URL based on latitude and longitude
+        val websiteUrl = "https://forecast.weather.gov/MapClick.php?lat=$latitude&lon=$longitude"
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(websiteUrl))
         val pendingIntent: PendingIntent = PendingIntent.getActivity(
             context,
             0,
             intent,
-            PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
         val notification = NotificationCompat.Builder(context, FREEZE_WARNING_CHANNEL_ID)
@@ -95,6 +97,7 @@ class NotificationHelper(private val context: Context) {
         return notification
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     fun sendNotification(notificationId: Int, notification: Notification) {
         if (ActivityCompat.checkSelfPermission(
                 context,

@@ -1,16 +1,17 @@
 // file: app/src/main/java/com/stoneCode/rain_alert/repository/WeatherRepository.kt
 package com.stoneCode.rain_alert.repository
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
 import android.util.Log
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import com.stoneCode.rain_alert.service.WeatherApiService
 import org.json.JSONObject
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
@@ -55,8 +56,18 @@ class WeatherRepository(private val context: Context) {
             for (i in 0 until periods.length()) {
                 val period = periods.getJSONObject(i)
                 val shortForecast = period.getString("shortForecast").lowercase(Locale.getDefault())
-                if (shortForecast.contains("rain")) {
-                    Log.d("WeatherRepository", "Rain detected in forecast: $shortForecast")
+                val probabilityOfPrecipitation = period.optJSONObject("probabilityOfPrecipitation")?.optInt("value", 0) ?: 0 // Get probability, default to 0 if not available
+
+                Log.d("WeatherRepository", "Parsing period: ${period.getString("name")}")
+                Log.d("WeatherRepository", "Parsing shortForecast: $shortForecast")
+                Log.d("WeatherRepository", "Probability of Precipitation: $probabilityOfPrecipitation")
+
+                // More refined criteria:
+                if (shortForecast.contains("rain") && probabilityOfPrecipitation >= 50) {
+                    Log.d("WeatherRepository", "Rain detected (shortForecast contains 'rain' and PoP >= 50)")
+                    return true
+                } else if (shortForecast.contains("showers") && probabilityOfPrecipitation >= 70) {
+                    Log.d("WeatherRepository", "Rain detected (shortForecast contains 'showers' and PoP >= 70)")
                     return true
                 }
             }
@@ -103,7 +114,72 @@ class WeatherRepository(private val context: Context) {
         return false
     }
 
-    private fun getLastKnownLocation(): Location? {
+    suspend fun getCurrentWeather(): String {
+        val lastKnownLocation = getLastKnownLocation() ?: return "Location unavailable"
+        val latitude = lastKnownLocation.latitude
+        val longitude = lastKnownLocation.longitude
+
+        val forecastJson = weatherApiService.getForecast(latitude, longitude)
+        if (forecastJson != null) {
+            try {
+                val forecast = JSONObject(forecastJson)
+                val periods = forecast.getJSONObject("properties").getJSONArray("periods")
+                val now = Date()
+                val dateFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
+                dateFormatter.timeZone = TimeZone.getTimeZone("UTC") // NWS API uses UTC
+
+                var currentPeriod: JSONObject? = null
+                for (i in 0 until periods.length()) {
+                    val period = periods.getJSONObject(i)
+                    val startTime = dateFormatter.parse(period.getString("startTime"))
+                    val endTime = dateFormatter.parse(period.getString("endTime"))
+
+                    if (now.after(startTime) && now.before(endTime)) {
+                        currentPeriod = period
+                        break
+                    }
+                }
+
+                if (currentPeriod != null) {
+                    val shortForecast = currentPeriod.getString("shortForecast")
+                    val temperature = currentPeriod.getInt("temperature")
+                    val temperatureUnit = currentPeriod.getString("temperatureUnit")
+                    var weatherInfo = "Now: $shortForecast, $temperature$temperatureUnit"
+
+                    // Add forecast for next few hours
+                    val nextPeriods = mutableListOf<String>()
+                    for (i in 0 until periods.length()) {
+                        val period = periods.getJSONObject(i)
+                        val startTime = dateFormatter.parse(period.getString("startTime"))
+
+                        if (startTime != null) {
+                            if (startTime.after(now)) {
+                                nextPeriods.add("${period.getString("name")}: ${period.getString("shortForecast")}")
+                                if (nextPeriods.size == 3) break // Get next 3 periods
+                            }
+                        }
+                    }
+
+                    if (nextPeriods.isNotEmpty()) {
+                        weatherInfo += "\n\nLater: ${nextPeriods.joinToString(", ")}"
+                    }
+
+                    return weatherInfo
+                } else {
+                    return "Current weather data not found in forecast"
+                }
+            } catch (e: Exception) {
+                Log.e("WeatherRepository", "Error parsing forecast", e)
+                return "Error parsing weather data"
+            }
+        } else {
+            return "Could not retrieve weather forecast"
+        }
+    }
+
+
+
+    fun getLastKnownLocation(): Location? {
         if (ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.ACCESS_FINE_LOCATION

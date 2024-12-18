@@ -1,3 +1,4 @@
+// file: app/src/main/java/com/stoneCode/rain_alert/MainActivity.kt
 package com.stoneCode.rain_alert
 
 import android.Manifest
@@ -17,10 +18,12 @@ import android.net.Uri
 import androidx.annotation.RequiresApi
 import com.stoneCode.rain_alert.service.RainService
 import com.stoneCode.rain_alert.ui.MainScreen
-import com.stonecode.rain_alert.viewmodel.WeatherViewModel
+import com.stoneCode.rain_alert.repository.WeatherRepository
+import com.stoneCode.rain_alert.viewmodel.WeatherViewModel
 
 class MainActivity : ComponentActivity() {
     private lateinit var weatherViewModel: WeatherViewModel
+    private lateinit var weatherRepository: WeatherRepository
 
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private val requestPermissionLauncher = registerForActivityResult(
@@ -68,11 +71,11 @@ class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        weatherViewModel = WeatherViewModel(application) // Initialize here
+        weatherViewModel = WeatherViewModel(application)
+        weatherRepository = WeatherRepository(this)
         enableEdgeToEdge()
         setContent {
             Rain_AlertTheme {
-                // val weatherViewModel: WeatherViewModel = viewModel() // Remove this line
                 MainScreen(
                     onStartServiceClick = {
                         Log.d("MainActivity", "Start Service button clicked")
@@ -123,7 +126,6 @@ class MainActivity : ComponentActivity() {
         weatherViewModel.unregisterServiceStatusListener()
     }
 
-
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun hasRequiredPermissions(): Boolean {
         val fineLocationGranted = ContextCompat.checkSelfPermission(
@@ -146,7 +148,7 @@ class MainActivity : ComponentActivity() {
         return fineLocationGranted && foregroundServiceLocationGranted && postNotificationsGranted
     }
 
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun requestRequiredPermissions() {
         val permissionsToRequest = mutableListOf<String>()
         if (ContextCompat.checkSelfPermission(
@@ -161,9 +163,7 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.FOREGROUND_SERVICE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                permissionsToRequest.add(Manifest.permission.FOREGROUND_SERVICE_LOCATION)
-            }
+            permissionsToRequest.add(Manifest.permission.FOREGROUND_SERVICE_LOCATION)
         }
         if (ContextCompat.checkSelfPermission(
                 this,
@@ -176,9 +176,7 @@ class MainActivity : ComponentActivity() {
         Log.d("MainActivity", "Requesting permissions: $permissionsToRequest")
 
         if (permissionsToRequest.isNotEmpty()) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                requestPermissionLauncher.launch(permissionsToRequest.toTypedArray())
-            }
+            requestPermissionLauncher.launch(permissionsToRequest.toTypedArray())
         }
     }
 
@@ -208,8 +206,14 @@ class MainActivity : ComponentActivity() {
 
     private fun openWeatherWebsite() {
         Log.d("MainActivity", "Opening Weather Website")
-        val websiteUrl = "https://www.weather.gov/"
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(websiteUrl))
-        startActivity(intent)
+        val location = weatherRepository.getLastKnownLocation()
+        if (location != null) {
+            val websiteUrl = "https://forecast.weather.gov/MapClick.php?lat=${location.latitude}&lon=${location.longitude}"
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(websiteUrl))
+            startActivity(intent)
+        } else {
+            Log.w("MainActivity", "Could not get location to open weather website")
+            Toast.makeText(this, "Could not get location", Toast.LENGTH_SHORT).show()
+        }
     }
 }

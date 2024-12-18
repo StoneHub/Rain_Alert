@@ -15,6 +15,7 @@ import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.StoneCode.rain_alert.R
@@ -66,6 +67,7 @@ class RainService : Service() {
         Log.d("RainService", "RainService created")
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d("RainService", "onStartCommand called with action: ${intent?.action}")
 
@@ -120,6 +122,7 @@ class RainService : Service() {
         Log.d("RainService", "Foreground notification created with intent to open MainActivity")
         return notification
     }
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun startRainCheck() {
         serviceScope.launch {
             while (true) {
@@ -132,6 +135,7 @@ class RainService : Service() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun startFreezeCheck() {
         serviceScope.launch {
             while (true) {
@@ -165,6 +169,7 @@ class RainService : Service() {
         return isFreezing
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun simulateRain() {
         serviceScope.launch {
             sendRainNotification()
@@ -172,21 +177,34 @@ class RainService : Service() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun simulateFreeze() {
         sendFreezeWarningNotification()
         Log.d("RainService", "Freeze simulation triggered")
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun sendRainNotification() {
-        val notification = notificationHelper.createRainNotification() // Use the new function
-        notificationHelper.sendNotification(NOTIFICATION_ID, notification)
-        Log.d("RainService", "Rain notification sent")
+        val location = weatherRepository.getLastKnownLocation()
+        if (location != null) {
+            val notification = notificationHelper.createRainNotification(location.latitude, location.longitude)
+            notificationHelper.sendNotification(NOTIFICATION_ID, notification)
+            Log.d("RainService", "Rain notification sent for ${location.latitude}, ${location.longitude}")
+        } else {
+            Log.w("RainService", "Could not get location for rain notification")
+        }
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun sendFreezeWarningNotification() {
-        val notification = notificationHelper.createFreezeWarningNotification()
-        notificationHelper.sendNotification(FREEZE_WARNING_NOTIFICATION_ID, notification)
-        Log.d("RainService", "Freeze warning notification sent")
+        val location = weatherRepository.getLastKnownLocation()
+        if (location != null) {
+            val notification = notificationHelper.createFreezeWarningNotification(location.latitude, location.longitude)
+            notificationHelper.sendNotification(FREEZE_WARNING_NOTIFICATION_ID, notification)
+            Log.d("RainService", "Freeze warning notification sent for ${location.latitude}, ${location.longitude}")
+        } else {
+            Log.w("RainService", "Could not get location for freeze warning notification")
+        }
     }
 
     override fun onBind(intent: Intent): IBinder? {

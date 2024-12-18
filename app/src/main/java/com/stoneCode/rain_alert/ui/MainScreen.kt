@@ -1,3 +1,4 @@
+// file: app/src/main/java/com/stoneCode/rain_alert/ui/MainScreen.kt
 package com.stoneCode.rain_alert.ui
 
 import android.util.Log
@@ -20,13 +21,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.stonecode.rain_alert.viewmodel.WeatherViewModel
+import com.stoneCode.rain_alert.viewmodel.WeatherViewModel
 
 @Composable
 fun MainScreen(
@@ -48,7 +48,7 @@ fun MainScreen(
     Log.d("MainScreen", "Weather Data: $weatherData")
 
     // Observe lifecycle events to refresh data
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
