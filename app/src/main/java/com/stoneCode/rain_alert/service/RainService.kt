@@ -1,4 +1,3 @@
-// file: app/src/main/java/com/stoneCode/rain_alert/service/RainService.kt
 package com.stoneCode.rain_alert.service
 
 import android.Manifest

@@ -1,28 +1,32 @@
-// Redesigned MainScreen with enhanced title positioning and spacing
+// file: C:/Users/monro/AndroidStudioProjects/Rain_Alert/app/src/main/java/com/stoneCode/rain_alert/ui/MainScreen.kt
 package com.stoneCode.rain_alert.ui
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.StoneCode.rain_alert.R
 import com.stoneCode.rain_alert.viewmodel.WeatherViewModel
+import kotlinx.coroutines.delay
 
 @Composable
 fun MainScreen(
@@ -35,7 +39,10 @@ fun MainScreen(
 ) {
     val isServiceRunning by weatherViewModel.isServiceRunning.observeAsState(false)
     val lastUpdateTime by weatherViewModel.lastUpdateTime.observeAsState("")
-    val weatherData by weatherViewModel.weatherData.observeAsState("Loading...")
+    val isDataReady by weatherViewModel.isDataReady.observeAsState(false) // Observe isDataReady
+    var weatherData by remember { mutableStateOf("Loading...") }
+    var isRefreshing by remember { mutableStateOf(false) }
+    var longPressDetected by remember { mutableStateOf(false) }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -48,6 +55,31 @@ fun MainScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             weatherViewModel.stopServiceChecker()
+        }
+    }
+
+    // Key the LaunchedEffect on weatherViewModel.weatherData to trigger updates
+    LaunchedEffect(weatherViewModel.weatherData, isRefreshing, isDataReady) {
+        weatherViewModel.weatherData.value?.let { data ->
+            if (!isRefreshing) {
+                // If not refreshing, update immediately
+                weatherData = data
+            } else {
+                if (!longPressDetected) {
+                    // Short delay before starting to scramble
+                    delay(500)
+                }
+
+                if (isDataReady) {
+                    // If data is ready, update weatherData and stop refreshing
+                    weatherData = data
+                    isRefreshing = false
+                    longPressDetected = false // Reset long press flag
+                } else {
+                    // If data is not ready, keep the previous data or "Loading..."
+                    // (Optional) You could also show a loading indicator here if needed
+                }
+            }
         }
     }
 
@@ -68,97 +100,36 @@ fun MainScreen(
                         .fillMaxSize()
                         .padding(innerPadding),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Top
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     // App Title
-                    Text(
-                        text = "Rain Alert",
-                        style = MaterialTheme.typography.displaySmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = "by StoneCode",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            fontWeight = FontWeight.Light
-                        ),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
+                    AppTitle()
 
                     // Weather Banner Section
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 32.dp)
-                            .background(MaterialTheme.colorScheme.secondary, shape = RoundedCornerShape(12.dp))
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "Latest Weather Data",
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSecondary
-                                )
-                            )
-                            Text(
-                                text = weatherData,
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    color = MaterialTheme.colorScheme.onSecondary
-                                ),
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Last Updated: $lastUpdateTime",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = MaterialTheme.colorScheme.onSecondary
-                                )
-                            )
-                        }
-                    }
+                    WeatherBanner(
+                        weatherData = weatherData,
+                        lastUpdateTime = lastUpdateTime,
+                        isRefreshing = isRefreshing,
+                        longPressDetected = longPressDetected,
+                        onLongPress = {
+                            longPressDetected = true
+                            isRefreshing = true
+                            weatherViewModel.updateWeatherStatus()
+                        },
+                        weatherViewModel = weatherViewModel
+                    )
 
                     // Control Buttons Section
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.padding(top = 16.dp)
-                    ) {
-                        ActionButton(
-                            text = if (isServiceRunning) "Stop Service" else "Start Service",
-                            onClick = if (isServiceRunning) onStopServiceClick else onStartServiceClick,
-                            backgroundColor = if (isServiceRunning) Color.Red else Color.Green
-                        )
-                        ActionButton(text = "Simulate Rain", onClick = onSimulateRainClick)
-                        ActionButton(text = "Simulate Freeze", onClick = onSimulateFreezeClick)
-                        ActionButton(text = "Open Weather Website", onClick = onOpenWeatherWebsiteClick)
-                    }
+                    ControlButtons(
+                        isServiceRunning = isServiceRunning,
+                        onStartServiceClick = onStartServiceClick,
+                        onStopServiceClick = onStopServiceClick,
+                        onSimulateRainClick = onSimulateRainClick,
+                        onSimulateFreezeClick = onSimulateFreezeClick,
+                        onOpenWeatherWebsiteClick = onOpenWeatherWebsiteClick
+                    )
                 }
             }
         }
     )
-}
-
-@Composable
-fun ActionButton(text: String, onClick: () -> Unit, backgroundColor: Color = MaterialTheme.colorScheme.primary) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 32.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = backgroundColor),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onPrimary),
-            modifier = Modifier.padding(8.dp)
-        )
-    }
 }

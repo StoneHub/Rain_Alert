@@ -1,4 +1,4 @@
-// file: app/src/main/java/com/stoneCode/rain_alert/viewmodel/WeatherViewModel.kt
+// file: C:/Users/monro/AndroidStudioProjects/Rain_Alert/app/src/main/java/com/stoneCode/rain_alert/viewmodel/WeatherViewModel.kt
 package com.stoneCode.rain_alert.viewmodel
 
 import android.app.Application
@@ -14,6 +14,7 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 class WeatherViewModel(application: Application) : AndroidViewModel(application),
     ServiceStatusListener {
@@ -24,6 +25,13 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     private val weatherRepository = WeatherRepository(application.applicationContext)
 
     private var serviceCheckJob: Job? = null
+
+    // new code added below:
+    val isDataReady = MutableLiveData(false)
+
+    private fun setIsDataReady(ready: Boolean) {
+        isDataReady.postValue(ready)
+    }
 
     // Called when the service status changes
     override fun onServiceStatusChanged(isRunning: Boolean) {
@@ -42,22 +50,26 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
 
     fun updateWeatherStatus() {
         Log.d("WeatherViewModel", "Updating weather status")
+        setIsDataReady(false) // Set to false when starting to fetch data
 
-        // Check if the service is running and update the LiveData
-        val serviceRunning = isRainServiceRunning()
-        isServiceRunning.postValue(serviceRunning)
-        Log.d("WeatherViewModel", "Service running status: $serviceRunning")
-
-        // Update the last update time
-        val currentTime = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
-        lastUpdateTime.postValue(currentTime)
-        Log.d("WeatherViewModel", "Last update time: $currentTime")
-
-        // Fetch real weather data from the repository
         viewModelScope.launch {
+            delay(500) // Introduce a small delay
+
+            // Check if the service is running and update the LiveData
+            val serviceRunning = isRainServiceRunning()
+            isServiceRunning.postValue(serviceRunning)
+            Log.d("WeatherViewModel", "Service running status: $serviceRunning")
+
+            // Update the last update time
+            val currentTime = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+            lastUpdateTime.postValue(currentTime)
+            Log.d("WeatherViewModel", "Last update time: $currentTime")
+
+            // Fetch real weather data from the repository
             val currentWeather = weatherRepository.getCurrentWeather()
             weatherData.postValue(currentWeather)
             Log.d("WeatherViewModel", "Weather data updated: $currentWeather")
+            setIsDataReady(true) // Set to true when data is fetched
         }
     }
 

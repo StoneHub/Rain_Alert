@@ -1,4 +1,3 @@
-// file: app/src/main/java/com/stoneCode/rain_alert/util/NotificationHelper.kt
 package com.stoneCode.rain_alert.util
 
 import android.Manifest
@@ -9,150 +8,88 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.AudioAttributes
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.util.Log
-import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.StoneCode.rain_alert.R
+
 class NotificationHelper(private val context: Context) {
 
-    val CHANNEL_ID = "rain_alert_channel"
-    val FREEZE_WARNING_CHANNEL_ID = "freeze_warning_channel"
-    val FOREGROUND_SERVICE_CHANNEL_ID = "foreground_service_channel" // New channel ID
+    val FOREGROUND_SERVICE_CHANNEL_ID = "foreground_service_channel"
+    private val RAIN_NOTIFICATION_CHANNEL_ID = "rain_notification_channel"
+    private val FREEZE_WARNING_CHANNEL_ID = "freeze_warning_channel"
 
     init {
-        createNotificationChannels()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            createNotificationChannel(FOREGROUND_SERVICE_CHANNEL_ID, "Foreground Service Channel", NotificationManager.IMPORTANCE_LOW)
+            createNotificationChannel(RAIN_NOTIFICATION_CHANNEL_ID, "Rain Notifications", NotificationManager.IMPORTANCE_HIGH)
+            createNotificationChannel(FREEZE_WARNING_CHANNEL_ID, "Freeze Warning Notifications", NotificationManager.IMPORTANCE_HIGH)
+        }
     }
 
-    private fun createNotificationChannels() {
+    private fun createNotificationChannel(channelId: String, channelName: String, importance: Int) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // Rain Alert Channel
-            val rainSoundUri =
-                Uri.parse("android.resource://${context.packageName}/${R.raw.rain_alert}")
-            Log.d("NotificationHelper", "Rain channel sound URI: $rainSoundUri")
-
-            val rainChannel = NotificationChannel(
-                CHANNEL_ID,
-                "Rain Alert Channel",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Channel for rain alerts"
-                setSound(
-                    rainSoundUri, AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build()
-                )
+            val channel = NotificationChannel(channelId, channelName, importance).apply {
+                description = "$channelName for Rain Alert"
             }
-            Log.d(
-                "NotificationHelper",
-                "Rain channel created: ${rainChannel.id}, Sound: ${rainChannel.sound}"
-            )
-
-            // Freeze Warning Channel
-            val freezeSoundUri =
-                Uri.parse("android.resource://${context.packageName}/${R.raw.freeze_warning}")
-            Log.d("NotificationHelper", "Freeze channel sound URI: $freezeSoundUri")
-
-            val freezeChannel = NotificationChannel(
-                FREEZE_WARNING_CHANNEL_ID,
-                "Freeze Warning Channel",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Channel for freeze warnings"
-                setSound(
-                    freezeSoundUri, AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build()
-                )
-            }
-            Log.d(
-                "NotificationHelper",
-                "Freeze channel created: ${freezeChannel.id}, Sound: ${freezeChannel.sound}"
-            )
-
-            // Foreground Service Channel
-            val foregroundServiceChannel = NotificationChannel(
-                FOREGROUND_SERVICE_CHANNEL_ID,
-                "Foreground Service Channel",
-                NotificationManager.IMPORTANCE_LOW // No sound or vibration
-            ).apply {
-                description = "Channel for the foreground service notification"
-            }
-            Log.d(
-                "NotificationHelper",
-                "Foreground service channel created: ${foregroundServiceChannel.id}"
-            )
-
-            // Register channels with the system
-            val notificationManager: NotificationManager =
+            val notificationManager =
                 context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(rainChannel)
-            notificationManager.createNotificationChannel(freezeChannel)
-            notificationManager.createNotificationChannel(foregroundServiceChannel)
+            notificationManager.createNotificationChannel(channel)
         }
     }
 
     fun createRainNotification(latitude: Double, longitude: Double): Notification {
-        val websiteUrl = "https://forecast.weather.gov/MapClick.php?lat=$latitude&lon=$longitude"
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(websiteUrl))
-        val pendingIntent: PendingIntent = PendingIntent.getActivity(
-            context,
-            0,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+        val notificationIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://forecast.weather.gov/MapClick.php?lat=$latitude&lon=$longitude"))
+        val pendingIntent = PendingIntent.getActivity(context, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE)
 
-        // No need to set sound here, it's defined in the channel
-        return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+        return NotificationCompat.Builder(context, RAIN_NOTIFICATION_CHANNEL_ID)
             .setContentTitle("Rain Alert!")
-            .setContentText("It's starting to rain!")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentText("It's about to rain! Tap to view details.")
+            .setSmallIcon(R.drawable.ic_launcher)
             .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
     }
 
     fun createFreezeWarningNotification(latitude: Double, longitude: Double): Notification {
-        val websiteUrl = "https://forecast.weather.gov/MapClick.php?lat=$latitude&lon=$longitude"
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(websiteUrl))
-        val pendingIntent: PendingIntent = PendingIntent.getActivity(
-            context,
-            0,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+        val notificationIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://forecast.weather.gov/MapClick.php?lat=$latitude&lon=$longitude"))
+        val pendingIntent = PendingIntent.getActivity(context, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE)
 
-        // No need to set sound here, it's defined in the channel
         return NotificationCompat.Builder(context, FREEZE_WARNING_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle("Freeze Warning!")
-            .setContentText("Temperature is below 35°F for 4 hours or more!")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentText("Freezing conditions expected! Tap to view details.")
+            .setSmallIcon(R.drawable.ic_launcher)
             .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
     }
 
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     fun sendNotification(notificationId: Int, notification: Notification) {
-        if (ActivityCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) != PackageManager.PERMISSION_GRANTED
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !context.getSystemService(NotificationManager::class.java).areNotificationsEnabled()
         ) {
-            Log.w("NotificationHelper", "Missing permission: ${Manifest.permission.POST_NOTIFICATIONS}")
+            // take user to settings to enable notifications for this app.
+            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            }
+            context.startActivity(intent)
             return
         }
+
         with(NotificationManagerCompat.from(context)) {
+            if (ActivityCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                Log.w("NotificationHelper", "POST_NOTIFICATIONS permission not granted")
+                return
+            }
             notify(notificationId, notification)
-            Log.d("NotificationHelper", "Notification sent: id=$notificationId, channel=${notification.channelId}")
         }
     }
 }
