@@ -1,6 +1,6 @@
-// file: C:/Users/monro/AndroidStudioProjects/Rain_Alert/app/src/main/java/com/stoneCode/rain_alert/ui/MainScreen.kt
 package com.stoneCode.rain_alert.ui
 
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +27,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.StoneCode.rain_alert.R
 import com.stoneCode.rain_alert.viewmodel.WeatherViewModel
 import kotlinx.coroutines.delay
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 
 @Composable
 fun MainScreen(
@@ -43,6 +46,7 @@ fun MainScreen(
     var weatherData by remember { mutableStateOf("Loading...") }
     var isRefreshing by remember { mutableStateOf(false) }
     var longPressDetected by remember { mutableStateOf(false) }
+    var initialContainerSize by remember { mutableStateOf(0.dp) }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -116,7 +120,13 @@ fun MainScreen(
                             isRefreshing = true
                             weatherViewModel.updateWeatherStatus()
                         },
-                        weatherViewModel = weatherViewModel
+                        weatherViewModel = weatherViewModel,
+                        onSizeCalculated = { size ->
+                            if (initialContainerSize < size) {
+                                initialContainerSize = size
+                            }
+                        },
+                        containerSize = initialContainerSize
                     )
 
                     // Control Buttons Section

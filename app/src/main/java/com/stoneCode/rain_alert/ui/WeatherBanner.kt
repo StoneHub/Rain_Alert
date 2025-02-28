@@ -17,6 +17,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +31,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.stoneCode.rain_alert.viewmodel.WeatherViewModel
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -37,8 +43,13 @@ fun WeatherBanner(
     isRefreshing: Boolean,
     longPressDetected: Boolean,
     onLongPress: () -> Unit,
-    weatherViewModel: WeatherViewModel
+    weatherViewModel: WeatherViewModel,
+    onSizeCalculated: (Dp) -> Unit, // Remove the @Composable annotation
+    containerSize: Dp
 ) {
+    // Get the density outside of the modifier callback
+    val density = LocalDensity.current
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -56,7 +67,13 @@ fun WeatherBanner(
                 indication = null, // Remove default ripple
                 interactionSource = remember { MutableInteractionSource() }
             )
-            .semantics { role = Role.Button },
+            .semantics { role = Role.Button }
+            .onGloballyPositioned { coordinates ->
+                // Use density that was captured in the composable, not in the callback
+                val heightDp = with(density) { coordinates.size.height.toDp() }
+                onSizeCalculated(heightDp)
+            }
+            .height(containerSize),
         contentAlignment = Alignment.Center
     ) {
         // Manual Ripple Effect with Overlay
@@ -95,7 +112,7 @@ fun WeatherBanner(
                     onAnimationFinished = {
                         if (weatherViewModel.isDataReady.value!!) {
                             weatherViewModel.weatherData.value?.let {
-
+                                // Empty for now
                             }
                         }
                     }

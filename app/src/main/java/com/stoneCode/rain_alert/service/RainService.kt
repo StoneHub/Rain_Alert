@@ -15,12 +15,12 @@ import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
 import androidx.annotation.RequiresApi
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.StoneCode.rain_alert.R
 import com.stoneCode.rain_alert.MainActivity
+import com.stoneCode.rain_alert.data.AppConfig
 import com.stoneCode.rain_alert.repository.WeatherRepository
-import com.stoneCode.rain_alert.util.NotificationHelper
+import com.stoneCode.rain_alert.util.EnhancedNotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -37,12 +37,7 @@ class RainService : Service() {
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
     private lateinit var weatherRepository: WeatherRepository
-    private lateinit var notificationHelper: NotificationHelper
-    private val RAIN_CHECK_INTERVAL = 15 * 60 * 1000L // 15 minutes
-    private val FREEZE_CHECK_INTERVAL = 60 * 60 * 1000L // 1 hour
-    private val NOTIFICATION_ID = 1
-    private val FOREGROUND_SERVICE_ID = 2
-    private val FREEZE_WARNING_NOTIFICATION_ID = 3
+    private lateinit var notificationHelper: EnhancedNotificationHelper
 
     companion object {
         var isRunning = false
@@ -60,7 +55,7 @@ class RainService : Service() {
     override fun onCreate() {
         super.onCreate()
         weatherRepository = WeatherRepository(this)
-        notificationHelper = NotificationHelper(this)
+        notificationHelper = EnhancedNotificationHelper(this)
         isRunning = true
         statusListener?.onServiceStatusChanged(true)
         Log.d("RainService", "RainService created")
@@ -70,7 +65,7 @@ class RainService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d("RainService", "onStartCommand called with action: ${intent?.action}")
 
-        startForeground(FOREGROUND_SERVICE_ID, createForegroundNotification())
+        startForeground(AppConfig.FOREGROUND_SERVICE_ID, notificationHelper.createForegroundServiceNotification())
 
         when (intent?.action) {
             "START_RAIN_CHECK" -> {
@@ -95,29 +90,6 @@ class RainService : Service() {
         return START_STICKY
     }
 
-    private fun createForegroundNotification(): Notification {
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(this, notificationHelper.FOREGROUND_SERVICE_CHANNEL_ID) // Use the new channel ID
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Rain Alert Service")
-            .setContentText("Monitoring weather for rain...")
-            .setPriority(NotificationCompat.PRIORITY_LOW) // Also set to low priority
-            .setContentIntent(pendingIntent)
-            .build()
-
-        Log.d("RainService", "Foreground notification created with intent to open MainActivity")
-        return notification
-    }
-
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun startRainCheck() {
         serviceScope.launch {
@@ -125,7 +97,7 @@ class RainService : Service() {
                 if (isRaining()) {
                     sendRainNotification()
                 }
-                delay(RAIN_CHECK_INTERVAL)
+                delay(AppConfig.RAIN_CHECK_INTERVAL_MS)
                 Log.d("RainService", "Rain check performed")
             }
         }
@@ -138,7 +110,7 @@ class RainService : Service() {
                 if (isFreezing()) {
                     sendFreezeWarningNotification()
                 }
-                delay(FREEZE_CHECK_INTERVAL)
+                delay(AppConfig.FREEZE_CHECK_INTERVAL_MS)
                 Log.d("RainService", "Freeze check performed")
             }
         }
@@ -183,9 +155,19 @@ class RainService : Service() {
     private fun sendRainNotification() {
         val location = weatherRepository.getLastKnownLocation()
         if (location != null) {
-            val notification = notificationHelper.createRainNotification(location.latitude, location.longitude)
-            notificationHelper.sendNotification(NOTIFICATION_ID, notification)
-            Log.d("RainService", "Rain notification sent for ${location.latitude}, ${location.longitude}")
+            serviceScope.launch {
+                val weatherInfo = weatherRepository.getCurrentWeather()
+                val notification = notificationHelper.createRainNotification(
+                    location.latitude,
+                    location.longitude,
+                    weatherInfo
+                )
+                notificationHelper.sendNotification(
+                    AppConfig.RAIN_NOTIFICATION_ID,
+                    notification
+                )
+                Log.d("RainService", "Enhanced rain notification sent")
+            }
         } else {
             Log.w("RainService", "Could not get location for rain notification")
         }
@@ -195,9 +177,15 @@ class RainService : Service() {
     private fun sendFreezeWarningNotification() {
         val location = weatherRepository.getLastKnownLocation()
         if (location != null) {
-            val notification = notificationHelper.createFreezeWarningNotification(location.latitude, location.longitude)
-            notificationHelper.sendNotification(FREEZE_WARNING_NOTIFICATION_ID, notification)
-            Log.d("RainService", "Freeze warning notification sent for ${location.latitude}, ${location.longitude}")
+            val notification = notificationHelper.createFreezeWarningNotification(
+                location.latitude,
+                location.longitude
+            )
+            notificationHelper.sendNotification(
+                AppConfig.FREEZE_WARNING_NOTIFICATION_ID,
+                notification
+            )
+            Log.d("RainService", "Enhanced freeze warning notification sent")
         } else {
             Log.w("RainService", "Could not get location for freeze warning notification")
         }
@@ -214,10 +202,7 @@ class RainService : Service() {
         statusListener?.onServiceStatusChanged(false)
         Log.d("RainService", "RainService destroyed")
 
-        // Get the NotificationManager
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        // Cancel all notifications
         notificationManager.cancelAll()
     }
 

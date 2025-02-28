@@ -30,6 +30,24 @@
             android:exported="false"
             android:foregroundServiceType="location" />
 
+        <receiver android:name="com.stoneCode.rain_alert.util.NotificationBroadcastReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="DISMISS_NOTIFICATION" />
+            </intent-filter>
+        </receiver>
+
+        <!-- For the WorkManager -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup" />
+        </provider>
+
         <receiver android:name="com.stoneCode.rain_alert.service.AlarmReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="com.stonecode.rain_alert.RAIN_ALARM" />

@@ -7,6 +7,7 @@ import android.util.Log
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import com.stoneCode.rain_alert.data.AppConfig
 import com.stoneCode.rain_alert.service.WeatherApiService
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -15,11 +16,11 @@ import java.util.Locale
 import java.util.TimeZone
 
 class WeatherRepository(private val context: Context) {
-
+    private val TAG = "WeatherRepository"
     private val weatherApiService = WeatherApiService()
     private var lastFreezeCheckTime: Long = 0
     private var isFreezing: Boolean = false
-    private val freezeThreshold = 35.0 // 35°F in Fahrenheit
+    private var precipitationChance: Int? = null
 
     suspend fun checkForRain(): Boolean {
         val lastKnownLocation = getLastKnownLocation() ?: return false
@@ -55,23 +56,24 @@ class WeatherRepository(private val context: Context) {
             for (i in 0 until periods.length()) {
                 val period = periods.getJSONObject(i)
                 val shortForecast = period.getString("shortForecast").lowercase(Locale.getDefault())
-                val probabilityOfPrecipitation = period.optJSONObject("probabilityOfPrecipitation")?.optInt("value", 0) ?: 0 // Get probability, default to 0 if not available
+                val probabilityOfPrecipitation = period.optJSONObject("probabilityOfPrecipitation")?.optInt("value", 0) ?: 0
 
-                Log.d("WeatherRepository", "Parsing period: ${period.getString("name")}")
-                Log.d("WeatherRepository", "Parsing shortForecast: $shortForecast")
-                Log.d("WeatherRepository", "Probability of Precipitation: $probabilityOfPrecipitation")
+                Log.d(TAG, "Parsing period: ${period.getString("name")}")
+                Log.d(TAG, "Parsing shortForecast: $shortForecast")
+                Log.d(TAG, "Probability of Precipitation: $probabilityOfPrecipitation")
 
-                // More refined criteria:
-                if (shortForecast.contains("rain") && probabilityOfPrecipitation >= 50) {
-                    Log.d("WeatherRepository", "Rain detected (shortForecast contains 'rain' and PoP >= 50)")
+                precipitationChance = probabilityOfPrecipitation
+
+                if (shortForecast.contains("rain") && probabilityOfPrecipitation >= AppConfig.RAIN_PROBABILITY_THRESHOLD) {
+                    Log.d(TAG, "Rain detected (shortForecast contains 'rain' and PoP >= ${AppConfig.RAIN_PROBABILITY_THRESHOLD})")
                     return true
-                } else if (shortForecast.contains("showers") && probabilityOfPrecipitation >= 70) {
-                    Log.d("WeatherRepository", "Rain detected (shortForecast contains 'showers' and PoP >= 70)")
+                } else if (shortForecast.contains("showers") && probabilityOfPrecipitation >= AppConfig.RAIN_PROBABILITY_THRESHOLD) {
+                    Log.d(TAG, "Rain detected (shortForecast contains 'showers' and PoP >= ${AppConfig.RAIN_PROBABILITY_THRESHOLD})")
                     return true
                 }
             }
         } catch (e: Exception) {
-            Log.e("WeatherRepository", "Error parsing forecast for rain", e)
+            Log.e(TAG, "Error parsing forecast for rain", e)
         }
         return false
     }
@@ -93,14 +95,14 @@ class WeatherRepository(private val context: Context) {
                 val startTimeString = period.getString("startTime")
                 val startTime = dateFormat.parse(startTimeString)?.time ?: continue
 
-                if (temperature <= freezeThreshold) {
+                if (temperature <= AppConfig.FREEZE_THRESHOLD_F) {
                     if (!isCurrentlyFreezing) {
                         freezeStartTime = startTime
                         isCurrentlyFreezing = true
                     }
                     val duration = startTime - freezeStartTime
                     if (duration >= 4 * 60 * 60 * 1000) { // 4 hours
-                        Log.d("WeatherRepository", "Freezing conditions detected for 4 hours or more")
+                        Log.d(TAG, "Freezing conditions detected for 4 hours or more")
                         return true
                     }
                 } else {
@@ -108,7 +110,7 @@ class WeatherRepository(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            Log.e("WeatherRepository", "Error parsing forecast for freeze", e)
+            Log.e(TAG, "Error parsing forecast for freeze", e)
         }
         return false
     }
@@ -168,7 +170,7 @@ class WeatherRepository(private val context: Context) {
                     return "Current weather data not found in forecast"
                 }
             } catch (e: Exception) {
-                Log.e("WeatherRepository", "Error parsing forecast", e)
+                Log.e(TAG, "Error parsing forecast", e)
                 return "Error parsing weather data"
             }
         } else {
@@ -176,15 +178,13 @@ class WeatherRepository(private val context: Context) {
         }
     }
 
-
-
     fun getLastKnownLocation(): Location? {
         if (ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.ACCESS_FINE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            Log.w("WeatherRepository", "Location permission not granted")
+            Log.w(TAG, "Location permission not granted")
             return null
         }
 
@@ -200,5 +200,9 @@ class WeatherRepository(private val context: Context) {
             }
         }
         return bestLocation
+    }
+
+    fun getPrecipitationChance(): Int? {
+        return precipitationChance
     }
 }

@@ -9,12 +9,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.ui.text.font.FontFamily
 import kotlin.random.Random
 
 // --- Adjustable Parameters ---
@@ -30,6 +32,20 @@ fun ScrambleText(
 ) {
     var scrambleText by remember { mutableStateOf(text) }
     var isAnimationRunning by remember { mutableStateOf(false) }
+    val fontSize = 18.sp // Constant font size
+
+    // Get the color from the MaterialTheme outside of remember
+    val textColor = MaterialTheme.colorScheme.onSecondary
+
+    // Define the TextStyle but don't use MaterialTheme inside remember
+    val textStyle = remember(textColor) {
+        TextStyle(
+            color = textColor,
+            fontSize = fontSize,
+            textAlign = TextAlign.Center,
+            fontFamily = FontFamily.Default
+        )
+    }
 
     LaunchedEffect(text, isStatic) {
         if (text.isNotEmpty() && !isAnimationRunning) {
@@ -95,11 +111,7 @@ fun ScrambleText(
 
     Text(
         text = scrambleText,
-        style = MaterialTheme.typography.bodyLarge.copy(
-            color = MaterialTheme.colorScheme.onSecondary,
-            fontSize = 18.sp
-        ),
-        textAlign = TextAlign.Center,
+        style = textStyle, // Use the defined TextStyle
         modifier = Modifier.width(IntrinsicSize.Max)
     )
 }
