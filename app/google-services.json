@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "507154507389",
+    "project_id": "rainalert-874d3",
+    "storage_bucket": "rainalert-874d3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:507154507389:android:d9caa0175aa612544d7314",
+        "android_client_info": {
+          "package_name": "com.StoneCode.rain_alert"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCTSTj9TM9zyKwpZpv9H6pFHvMeqkThCo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
