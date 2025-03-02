@@ -76,8 +76,26 @@ class RainService : Service() {
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d("RainService", "onStartCommand called with action: ${intent?.action}")
-
+        
+        // Always start as foreground with a notification, even if we'll exit soon due to permissions
         startForeground(AppConfig.FOREGROUND_SERVICE_ID, notificationHelper.createForegroundServiceNotification())
+        
+        // Check if we have the required permissions for foreground service with location type
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            Log.e("RainService", "Location permissions not granted, showing permissions required notification and stopping service")
+            
+            // Show a notification about missing permissions instead of just stopping
+            val permissionNotification = notificationHelper.createPermissionRequiredNotification()
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.notify(AppConfig.PERMISSION_NOTIFICATION_ID, permissionNotification)
+            
+            // Stop the service after showing the notification
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        
+        // Normal service operation continues here
 
         when (intent?.action) {
             "START_RAIN_CHECK" -> {

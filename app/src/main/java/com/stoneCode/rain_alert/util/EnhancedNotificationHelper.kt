@@ -24,6 +24,7 @@ import com.stoneCode.rain_alert.data.AppConfig
 import com.stoneCode.rain_alert.data.UserPreferences
 import com.stoneCode.rain_alert.firebase.FirebaseLogger
 import com.stoneCode.rain_alert.repository.AlertHistoryRepository
+import com.stoneCode.rain_alert.repository.WeatherRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
@@ -124,6 +125,31 @@ class EnhancedNotificationHelper(private val context: Context) {
             .setContentIntent(pendingIntent)
             .build()
     }
+    
+    fun createPermissionRequiredNotification(): Notification {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("checkPermissions", true)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        return NotificationCompat.Builder(context, RAIN_NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("Location Permission Required")
+            .setContentText("Rain Alert needs location permission to monitor weather in your area")
+            .setStyle(NotificationCompat.BigTextStyle()
+                .bigText("Rain Alert needs location permission to check weather conditions in your area. Tap here to open settings and grant the required permissions."))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ERROR)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+    }
 
     fun createRainNotification(latitude: Double, longitude: Double, weatherInfo: String = ""): Notification {
         val weatherIntent = Intent(Intent.ACTION_VIEW, Uri.parse(
@@ -134,9 +160,18 @@ class EnhancedNotificationHelper(private val context: Context) {
         // Check if custom sounds are enabled
         val useCustomSounds = runBlocking { userPreferences.useCustomSounds.first() }
         
+        // Extract key weather data to show in the title or short content
+        var shortWeatherInfo = "It's about to rain!"
+        if (weatherInfo.isNotEmpty()) {
+            val lines = weatherInfo.split("\n")
+            if (lines.isNotEmpty() && lines[0].contains("Now:")) {
+                shortWeatherInfo = "Rain soon - ${lines[0].replace("Now: ", "")}"
+            }
+        }
+
         val builder = NotificationCompat.Builder(context, RAIN_NOTIFICATION_CHANNEL_ID)
             .setContentTitle("Rain Alert!")
-            .setContentText("It's about to rain! Tap for details.")
+            .setContentText(shortWeatherInfo)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setLargeIcon(BitmapFactory.decodeResource(
                 context.resources, R.drawable.ic_launcher_foreground))
@@ -169,14 +204,31 @@ class EnhancedNotificationHelper(private val context: Context) {
 
         // Check if custom sounds are enabled
         val useCustomSounds = runBlocking { userPreferences.useCustomSounds.first() }
+        
+        // Get the freeze threshold from user preferences for dynamic message
+        val freezeThreshold = runBlocking { userPreferences.freezeThreshold.first() }
+        
+        // Get current temperature if available
+        val weatherRepository = WeatherRepository(context)
+        val currentTemp = weatherRepository.getCurrentTemperature()
+        
+        // Create a detailed notification text
+        val shortInfo = if (currentTemp != null) {
+            "Current: ${currentTemp.toInt()}°F, expected to drop below ${freezeThreshold.toInt()}°F"
+        } else {
+            "Freezing conditions expected in your area!"
+        }
 
         val builder = NotificationCompat.Builder(context, FREEZE_WARNING_CHANNEL_ID)
             .setContentTitle("Freeze Warning!")
-            .setContentText("Freezing conditions expected in your area!")
+            .setContentText(shortInfo)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setStyle(NotificationCompat.BigTextStyle()
-                .bigText("Freezing conditions expected! Temperatures will be below 35°F " +
-                        "for at least 4 hours.\n\nTap to see detailed forecast."))
+                .bigText("Freezing conditions expected! Temperatures will be below ${freezeThreshold.toInt()}°F " +
+                        "for at least 4 hours.\n\n" + 
+                        (if (currentTemp != null) "Current temperature: ${currentTemp.toInt()}°F\n\n" else "") +
+                        "Protect sensitive plants, outdoor pipes, and pets.\n\n" +
+                        "Tap to see detailed forecast."))
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)

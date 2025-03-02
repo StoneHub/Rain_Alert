@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var weatherRepository: WeatherRepository
     private lateinit var firebaseLogger: FirebaseLogger
 
-    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -75,7 +75,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         weatherViewModel = WeatherViewModel(application)
@@ -84,6 +84,18 @@ class MainActivity : ComponentActivity() {
         // Initialize Firebase Logger
         firebaseLogger = FirebaseLogger.getInstance()
         firebaseLogger.initialize(this)
+        
+        // Check for permissions right away if coming from a notification
+        if (intent != null && (intent.hasExtra("checkPermissions") || intent.action == "android.settings.APP_NOTIFICATION_SETTINGS")) {
+            Log.d("MainActivity", "Checking permissions on launch")
+            if (hasRequiredPermissions()) {
+                // If permissions are now granted and we were coming from a notification, start the service
+                startRainService()
+            } else {
+                // If still missing permissions, request them
+                requestRequiredPermissions()
+            }
+        }
         
         enableEdgeToEdge()
         setContent {
@@ -102,16 +114,23 @@ class MainActivity : ComponentActivity() {
                 MainScreen(
                     onStartServiceClick = {
                         Log.d("MainActivity", "Start Service button clicked")
-                        if (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        if (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                 hasRequiredPermissions()
                             } else {
-                                TODO("VERSION.SDK_INT < UPSIDE_DOWN_CAKE")
+                                // For older versions - need at least the location permission
+                                ContextCompat.checkSelfPermission(
+                                    this@MainActivity, 
+                                    Manifest.permission.ACCESS_FINE_LOCATION
+                                ) == PackageManager.PERMISSION_GRANTED
                             }
                         ) {
                             startRainService()
                         } else {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                 requestRequiredPermissions()
+                            } else {
+                                // For older versions - request just the location permission
+                                requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 100)
                             }
                         }
                     },
@@ -178,7 +197,7 @@ class MainActivity : ComponentActivity() {
         weatherViewModel.unregisterServiceStatusListener()
     }
 
-    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun hasRequiredPermissions(): Boolean {
         val fineLocationGranted = ContextCompat.checkSelfPermission(
             this,
@@ -200,7 +219,7 @@ class MainActivity : ComponentActivity() {
         return fineLocationGranted && foregroundServiceLocationGranted && postNotificationsGranted
     }
 
-    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun requestRequiredPermissions() {
         val permissionsToRequest = mutableListOf<String>()
         if (ContextCompat.checkSelfPermission(

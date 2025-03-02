@@ -23,6 +23,7 @@ object AppConfig {
     const val FOREGROUND_SERVICE_ID = 2
     const val RAIN_NOTIFICATION_ID = 1
     const val FREEZE_WARNING_NOTIFICATION_ID = 3
+    const val PERMISSION_NOTIFICATION_ID = 4
 
     // DataStore preference keys
     val FREEZE_THRESHOLD_KEY = doublePreferencesKey("freeze_threshold")
