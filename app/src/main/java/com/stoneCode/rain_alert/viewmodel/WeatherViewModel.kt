@@ -5,16 +5,21 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
+import com.stoneCode.rain_alert.data.AlertHistoryEntry
+import com.stoneCode.rain_alert.data.AppConfig
 import com.stoneCode.rain_alert.firebase.FirebaseLogger
 import com.stoneCode.rain_alert.service.RainService
 import com.stoneCode.rain_alert.service.ServiceStatusListener
+import com.stoneCode.rain_alert.repository.AlertHistoryRepository
 import com.stoneCode.rain_alert.repository.WeatherRepository
 import com.stoneCode.rain_alert.ui.ApiStatus
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
@@ -25,9 +30,21 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     val lastUpdateTime = MutableLiveData("")
     val weatherData = MutableLiveData("Loading...")
     private val weatherRepository = WeatherRepository(application.applicationContext)
+    private val alertHistoryRepository = AlertHistoryRepository(application.applicationContext)
     private val firebaseLogger = FirebaseLogger.getInstance()
 
     private var serviceCheckJob: Job? = null
+    
+    // Current location for display
+    val currentLocation = MutableLiveData<String>(null)
+    
+    // Raw API data for debugging
+    val rawApiData = MutableLiveData<String>(null)
+    
+    // Alert history as LiveData
+    val alertHistory = alertHistoryRepository.getAlertHistory()
+        .distinctUntilChanged()
+        .asLiveData()
 
     // API status tracking
     val apiStatus = MutableLiveData<ApiStatus>(ApiStatus(
@@ -77,10 +94,32 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
             Log.d("WeatherViewModel", "Last update time: $currentTime")
 
             try {
+                // Get location information for display
+                val location = weatherRepository.getLastKnownLocation()
+                if (location != null) {
+                    val geocoder = android.location.Geocoder(getApplication())
+                    val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+                    if (addresses != null && addresses.isNotEmpty()) {
+                        val address = addresses[0]
+                        val locationString = if (address.postalCode != null) {
+                            "${address.locality ?: ""}, ${address.adminArea ?: ""} ${address.postalCode}"
+                        } else {
+                            "Lat: ${String.format("%.6f", location.latitude)}, Lng: ${String.format("%.6f", location.longitude)}"
+                        }
+                        currentLocation.postValue(locationString)
+                    } else {
+                        currentLocation.postValue("Lat: ${String.format("%.6f", location.latitude)}, Lng: ${String.format("%.6f", location.longitude)}")
+                    }
+                }
+                
                 // Fetch real weather data from the repository
                 val currentWeather = weatherRepository.getCurrentWeather()
                 weatherData.postValue(currentWeather)
                 Log.d("WeatherViewModel", "Weather data updated: $currentWeather")
+                
+                // Get raw API data for debugging
+                val rawData = weatherRepository.getRawApiResponse()
+                rawApiData.postValue(rawData)
                 
                 // Update API status with success
                 val responseTime = System.currentTimeMillis() - startTime
@@ -89,7 +128,9 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                     lastUpdated = System.currentTimeMillis(),
                     responseTime = responseTime,
                     rainProbability = weatherRepository.getPrecipitationChance(),
-                    temperature = null
+                    temperature = weatherRepository.getCurrentTemperature(),
+                    locationInfo = currentLocation.value,
+                    rawApiData = rawData
                 ))
                 
                 // Log API success to Firebase
@@ -103,7 +144,8 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                 apiStatus.postValue(ApiStatus(
                     isConnected = false,
                     lastUpdated = System.currentTimeMillis(),
-                    errorMessage = e.message ?: "Unknown error"
+                    errorMessage = e.message ?: "Unknown error",
+                    locationInfo = currentLocation.value
                 ))
                 
                 // Log API failure to Firebase
@@ -127,5 +169,23 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     fun stopServiceChecker() {
         serviceCheckJob?.cancel()
         serviceCheckJob = null
+    }
+    
+    /**
+     * Refresh weather data manually
+     */
+    fun refreshWeatherData() {
+        viewModelScope.launch {
+            updateWeatherStatus()
+        }
+    }
+    
+    /**
+     * Clear alert history
+     */
+    fun clearAlertHistory() {
+        viewModelScope.launch {
+            alertHistoryRepository.clearHistory()
+        }
     }
 }

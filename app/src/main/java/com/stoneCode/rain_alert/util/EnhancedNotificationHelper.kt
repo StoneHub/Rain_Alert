@@ -19,9 +19,11 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.StoneCode.rain_alert.R
 import com.stoneCode.rain_alert.MainActivity
+import com.stoneCode.rain_alert.data.AlertType
 import com.stoneCode.rain_alert.data.AppConfig
 import com.stoneCode.rain_alert.data.UserPreferences
 import com.stoneCode.rain_alert.firebase.FirebaseLogger
+import com.stoneCode.rain_alert.repository.AlertHistoryRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
@@ -32,6 +34,7 @@ class EnhancedNotificationHelper(private val context: Context) {
     private val FREEZE_WARNING_CHANNEL_ID = "freeze_warning_channel"
     private val userPreferences = UserPreferences(context)
     private val firebaseLogger = FirebaseLogger.getInstance()
+    private val alertHistoryRepository = AlertHistoryRepository(context)
 
     init {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -190,7 +193,7 @@ class EnhancedNotificationHelper(private val context: Context) {
         return builder.build()
     }
 
-    suspend fun sendNotification(notificationId: Int, notification: Notification) {
+    suspend fun sendNotification(notificationId: Int, notification: Notification, weatherInfo: String = "", temperature: Double? = null, precipitation: Int? = null, windSpeed: Double? = null) {
         // Check notification preferences before sending
         val shouldSendRainNotification = userPreferences.enableRainNotifications.first()
         val shouldSendFreezeNotification = userPreferences.enableFreezeNotifications.first()
@@ -224,12 +227,34 @@ class EnhancedNotificationHelper(private val context: Context) {
             }
             notify(notificationId, notification)
             
-            // Log to Firebase
+            // Determine notification type and log to history
             val notificationType = when(notificationId) {
-                AppConfig.RAIN_NOTIFICATION_ID -> "rain"
-                AppConfig.FREEZE_WARNING_NOTIFICATION_ID -> "freeze"
+                AppConfig.RAIN_NOTIFICATION_ID -> {
+                    // Log to alert history
+                    alertHistoryRepository.addAlertToHistory(
+                        type = AlertType.RAIN,
+                        weatherConditions = weatherInfo.ifEmpty { "Rain expected in your area" },
+                        temperature = temperature,
+                        precipitation = precipitation,
+                        windSpeed = windSpeed
+                    )
+                    "rain"
+                }
+                AppConfig.FREEZE_WARNING_NOTIFICATION_ID -> {
+                    // Log to alert history
+                    alertHistoryRepository.addAlertToHistory(
+                        type = AlertType.FREEZE,
+                        weatherConditions = weatherInfo.ifEmpty { "Freezing conditions expected" },
+                        temperature = temperature,
+                        precipitation = precipitation,
+                        windSpeed = windSpeed
+                    )
+                    "freeze"
+                }
                 else -> "other"
             }
+            
+            // Log to Firebase
             firebaseLogger.logNotificationSent(notificationType)
         }
     }

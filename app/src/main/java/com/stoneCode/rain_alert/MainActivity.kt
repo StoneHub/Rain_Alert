@@ -21,6 +21,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.stoneCode.rain_alert.firebase.FirebaseLogger
 import com.stoneCode.rain_alert.service.RainService
+import com.stoneCode.rain_alert.ui.AlertHistoryScreen
 import com.stoneCode.rain_alert.ui.MainScreen
 import com.stoneCode.rain_alert.ui.SettingsScreen
 import com.stoneCode.rain_alert.repository.WeatherRepository
@@ -140,6 +141,18 @@ class MainActivity : ComponentActivity() {
                     },
                     onSettingsClick = {
                         navController.navigate("settings")
+                    },
+                    onViewHistoryClick = {
+                        navController.navigate("alert_history")
+                    },
+                    weatherViewModel = weatherViewModel
+                )
+            }
+            
+            composable("alert_history") {
+                AlertHistoryScreen(
+                    onBackClick = {
+                        navController.popBackStack()
                     },
                     weatherViewModel = weatherViewModel
                 )

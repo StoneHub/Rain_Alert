@@ -54,6 +54,8 @@ android {
 
 dependencies {
 
+    implementation(libs.androidx.material.icons.extended)
+
     // Retrofit for API calls
     implementation(libs.retrofit)
     implementation(libs.converter.gson)

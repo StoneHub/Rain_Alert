@@ -18,6 +18,11 @@ import java.util.TimeZone
 class WeatherRepository(private val context: Context) {
     private val TAG = "WeatherRepository"
     private val weatherApiService = WeatherApiService(context)
+    
+    // Store raw API response for debugging
+    private var rawApiResponse: String? = null
+    private var currentTemperature: Double? = null
+    
     private var lastFreezeCheckTime: Long = 0
     private var isFreezing: Boolean = false
     private var precipitationChance: Int? = null
@@ -50,6 +55,9 @@ class WeatherRepository(private val context: Context) {
 
     private fun parseForecastForRain(forecastJson: String): Boolean {
         try {
+            // Store raw API response for debugging
+            rawApiResponse = forecastJson
+            
             val forecast = JSONObject(forecastJson)
             val periods = forecast.getJSONObject("properties").getJSONArray("periods")
 
@@ -57,19 +65,26 @@ class WeatherRepository(private val context: Context) {
                 val period = periods.getJSONObject(i)
                 val shortForecast = period.getString("shortForecast").lowercase(Locale.getDefault())
                 val probabilityOfPrecipitation = period.optJSONObject("probabilityOfPrecipitation")?.optInt("value", 0) ?: 0
+                val windSpeed = period.optString("windSpeed", "")
+                val windInt = windSpeed.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
 
                 Log.d(TAG, "Parsing period: ${period.getString("name")}")
                 Log.d(TAG, "Parsing shortForecast: $shortForecast")
                 Log.d(TAG, "Probability of Precipitation: $probabilityOfPrecipitation")
+                Log.d(TAG, "Wind speed: $windSpeed (parsed as $windInt)")
 
                 precipitationChance = probabilityOfPrecipitation
 
-                if (shortForecast.contains("rain") && probabilityOfPrecipitation >= AppConfig.RAIN_PROBABILITY_THRESHOLD) {
-                    Log.d(TAG, "Rain detected (shortForecast contains 'rain' and PoP >= ${AppConfig.RAIN_PROBABILITY_THRESHOLD})")
+                // Check for rain or showers with probability over threshold
+                if ((shortForecast.contains("rain") || shortForecast.contains("showers")) 
+                    && probabilityOfPrecipitation >= AppConfig.RAIN_PROBABILITY_THRESHOLD) {
+                    Log.d(TAG, "Rain detected (shortForecast contains 'rain'/'showers' and PoP >= ${AppConfig.RAIN_PROBABILITY_THRESHOLD})")
                     return true
-                } else if (shortForecast.contains("showers") && probabilityOfPrecipitation >= AppConfig.RAIN_PROBABILITY_THRESHOLD) {
-                    Log.d(TAG, "Rain detected (shortForecast contains 'showers' and PoP >= ${AppConfig.RAIN_PROBABILITY_THRESHOLD})")
-                    return true
+                }
+                
+                // High wind without rain should not trigger rain alert
+                if (windInt > 20 && !shortForecast.contains("rain") && !shortForecast.contains("showers")) {
+                    Log.d(TAG, "High wind detected ($windInt) but no rain in forecast, not triggering rain alert")
                 }
             }
         } catch (e: Exception) {
@@ -123,6 +138,9 @@ class WeatherRepository(private val context: Context) {
         val forecastJson = weatherApiService.getForecast(latitude, longitude)
         if (forecastJson != null) {
             try {
+                // Store raw API response for debugging
+                rawApiResponse = forecastJson
+                
                 val forecast = JSONObject(forecastJson)
                 val periods = forecast.getJSONObject("properties").getJSONArray("periods")
                 val now = Date()
@@ -145,7 +163,13 @@ class WeatherRepository(private val context: Context) {
                     val shortForecast = currentPeriod.getString("shortForecast")
                     val temperature = currentPeriod.getInt("temperature")
                     val temperatureUnit = currentPeriod.getString("temperatureUnit")
+                    val windSpeed = currentPeriod.optString("windSpeed", "N/A")
+                    
+                    // Store current temperature for debugging and display
+                    currentTemperature = temperature.toDouble()
+                    
                     var weatherInfo = "Now: $shortForecast, $temperature$temperatureUnit"
+                    weatherInfo += "\nWind: $windSpeed"
 
                     // Add forecast for next few hours
                     val nextPeriods = mutableListOf<String>()
@@ -204,5 +228,13 @@ class WeatherRepository(private val context: Context) {
 
     fun getPrecipitationChance(): Int? {
         return precipitationChance
+    }
+    
+    fun getRawApiResponse(): String? {
+        return rawApiResponse
+    }
+    
+    fun getCurrentTemperature(): Double? {
+        return currentTemperature
     }
 }

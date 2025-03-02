@@ -197,15 +197,21 @@ class RainService : Service() {
         val location = weatherRepository.getLastKnownLocation()
         if (location != null) {
             val weatherInfo = weatherRepository.getCurrentWeather()
+            val precipitationChance = weatherRepository.getPrecipitationChance()
+            
             val notification = notificationHelper.createRainNotification(
                 location.latitude,
                 location.longitude,
                 weatherInfo
             )
+            
             notificationHelper.sendNotification(
                 AppConfig.RAIN_NOTIFICATION_ID,
-                notification
+                notification,
+                weatherInfo = weatherInfo,
+                precipitation = precipitationChance
             )
+            
             Log.d("RainService", "Enhanced rain notification sent")
         } else {
             Log.w("RainService", "Could not get location for rain notification")
@@ -216,14 +222,21 @@ class RainService : Service() {
     private suspend fun sendFreezeWarningNotification() {
         val location = weatherRepository.getLastKnownLocation()
         if (location != null) {
+            val weatherInfo = weatherRepository.getCurrentWeather()
+            val freezeThreshold = userPreferences.freezeThreshold.first()
+
             val notification = notificationHelper.createFreezeWarningNotification(
                 location.latitude,
                 location.longitude
             )
+            
             notificationHelper.sendNotification(
                 AppConfig.FREEZE_WARNING_NOTIFICATION_ID,
-                notification
+                notification,
+                weatherInfo = weatherInfo,
+                temperature = freezeThreshold
             )
+            
             Log.d("RainService", "Enhanced freeze warning notification sent")
         } else {
             Log.w("RainService", "Could not get location for freeze warning notification")

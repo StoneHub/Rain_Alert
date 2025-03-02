@@ -5,17 +5,32 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -28,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -44,6 +60,7 @@ fun MainScreen(
     onSimulateRainClick: () -> Unit,
     onOpenWeatherWebsiteClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onViewHistoryClick: () -> Unit,
     weatherViewModel: WeatherViewModel = viewModel()
 ) {
     val isServiceRunning by weatherViewModel.isServiceRunning.observeAsState(false)
@@ -90,14 +107,28 @@ fun MainScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onSettingsClick,
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Settings"
-                )
+            Column {
+                // History button
+                FloatingActionButton(
+                    onClick = onViewHistoryClick,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.History,
+                        contentDescription = "View Alert History"
+                    )
+                }
+                
+                // Settings button
+                FloatingActionButton(
+                    onClick = onSettingsClick,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings"
+                    )
+                }
             }
         },
         content = { innerPadding ->
@@ -151,9 +182,70 @@ fun MainScreen(
                         onOpenWeatherWebsiteClick = onOpenWeatherWebsiteClick
                     )
                     
-                    // API Status Section
+                    // API Status Section with refresh button - Removed external header as it's inside the component now
                     apiStatus?.let { status ->
-                        ApiStatusWidget(apiStatus = status)
+                        ApiStatusWidget(
+                            apiStatus = status.copy(
+                                serviceProvider = "National Weather Service",
+                                locationInfo = weatherViewModel.currentLocation.value,
+                                rawApiData = weatherViewModel.rawApiData.value
+                            ),
+                            onRefreshClick = { 
+                                isRefreshing = true
+                                weatherViewModel.refreshWeatherData() 
+                            },
+                            isRefreshing = isRefreshing
+                        )
+                    }
+                    
+                    // Current Weather Details Card
+                    if (!isRefreshing && weatherData.isNotEmpty() && weatherData != "Loading...") {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Current Weather",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    
+                                    // Location indicator if available
+                                    weatherViewModel.currentLocation.value?.let { location ->
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.LocationOn,
+                                                contentDescription = "Location",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = location,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                Text(
+                                    text = weatherData,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
                     }
                     
                     // Add space at the bottom for better scrolling
