@@ -22,6 +22,12 @@ class UserPreferences(private val context: Context) {
         .map { preferences ->
             preferences[AppConfig.FREEZE_THRESHOLD_KEY] ?: AppConfig.FREEZE_THRESHOLD_F
         }
+        
+    // Get freeze duration threshold with default value
+    val freezeDurationHours: Flow<Int> = context.dataStore.data
+        .map { preferences ->
+            preferences[AppConfig.FREEZE_DURATION_HOURS_KEY] ?: AppConfig.FREEZE_DURATION_HOURS
+        }
 
     // Get rain probability threshold with default value
     val rainProbabilityThreshold: Flow<Int> = context.dataStore.data
@@ -63,6 +69,13 @@ class UserPreferences(private val context: Context) {
     suspend fun updateFreezeThreshold(threshold: Double) {
         context.dataStore.edit { preferences ->
             preferences[AppConfig.FREEZE_THRESHOLD_KEY] = threshold
+        }
+    }
+    
+    // Update freeze duration threshold
+    suspend fun updateFreezeDurationHours(hours: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[AppConfig.FREEZE_DURATION_HOURS_KEY] = hours
         }
     }
 

@@ -7,21 +7,20 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
-import com.stoneCode.rain_alert.data.AlertHistoryEntry
-import com.stoneCode.rain_alert.data.AppConfig
+import com.stoneCode.rain_alert.data.StationObservation
 import com.stoneCode.rain_alert.firebase.FirebaseLogger
-import com.stoneCode.rain_alert.service.RainService
-import com.stoneCode.rain_alert.service.ServiceStatusListener
 import com.stoneCode.rain_alert.repository.AlertHistoryRepository
 import com.stoneCode.rain_alert.repository.WeatherRepository
+import com.stoneCode.rain_alert.service.RainService
+import com.stoneCode.rain_alert.service.ServiceStatusListener
 import com.stoneCode.rain_alert.ui.ApiStatus
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 
 class WeatherViewModel(application: Application) : AndroidViewModel(application),
     ServiceStatusListener {
@@ -33,6 +32,9 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     private val alertHistoryRepository = AlertHistoryRepository(application.applicationContext)
     private val firebaseLogger = FirebaseLogger.getInstance()
 
+    // Station data for display
+    val stationData = MutableLiveData<List<StationObservation>>(emptyList())
+    
     private var serviceCheckJob: Job? = null
     
     // Current location for display
@@ -117,9 +119,12 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                 weatherData.postValue(currentWeather)
                 Log.d("WeatherViewModel", "Weather data updated: $currentWeather")
                 
+                // Update station data
+                stationData.postValue(weatherRepository.getCurrentStations())
+                
                 // Get raw API data for debugging
                 val rawData = weatherRepository.getRawApiResponse()
-                rawApiData.postValue(rawData)
+                rawApiData.postValue(rawData!!)
                 
                 // Update API status with success
                 val responseTime = System.currentTimeMillis() - startTime

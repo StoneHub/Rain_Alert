@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import com.google.firebase.analytics.FirebaseAnalytics
+import com.stoneCode.rain_alert.data.AppConfig
 import java.util.UUID
 
 /**
@@ -56,11 +57,13 @@ class FirebaseLogger private constructor() {
         rainProbabilityThreshold: Int,
         enableRainNotifications: Boolean,
         enableFreezeNotifications: Boolean,
-        useCustomSounds: Boolean
+        useCustomSounds: Boolean,
+        freezeDurationHours: Int = AppConfig.FREEZE_DURATION_HOURS
     ) {
         try {
             val bundle = Bundle().apply {
                 putDouble("freeze_threshold", freezeThreshold)
+                putInt("freeze_duration_hours", freezeDurationHours)
                 putInt("rain_probability_threshold", rainProbabilityThreshold)
                 putBoolean("enable_rain_notifications", enableRainNotifications)
                 putBoolean("enable_freeze_notifications", enableFreezeNotifications)

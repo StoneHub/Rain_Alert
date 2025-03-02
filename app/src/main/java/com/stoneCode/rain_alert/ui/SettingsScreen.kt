@@ -29,6 +29,7 @@ fun SettingsScreen(
     
     // State for settings
     var freezeThreshold by remember { mutableStateOf(AppConfig.FREEZE_THRESHOLD_F) }
+    var freezeDurationHours by remember { mutableStateOf(AppConfig.FREEZE_DURATION_HOURS) }
     var rainProbabilityThreshold by remember { mutableStateOf(AppConfig.RAIN_PROBABILITY_THRESHOLD) }
     var enableRainNotifications by remember { mutableStateOf(true) }
     var enableFreezeNotifications by remember { mutableStateOf(true) }
@@ -37,6 +38,7 @@ fun SettingsScreen(
     // Load current preferences
     LaunchedEffect(Unit) {
         freezeThreshold = userPreferences.freezeThreshold.first()
+        freezeDurationHours = userPreferences.freezeDurationHours.first()
         rainProbabilityThreshold = userPreferences.rainProbabilityThreshold.first()
         enableRainNotifications = userPreferences.enableRainNotifications.first()
         enableFreezeNotifications = userPreferences.enableFreezeNotifications.first()
@@ -78,6 +80,16 @@ fun SettingsScreen(
                 onValueChange = { freezeThreshold = it.toDouble() },
                 valueRange = 25f..45f,
                 steps = 20,
+                modifier = Modifier.fillMaxWidth()
+            )
+            
+            // Freeze duration slider
+            Text("Freeze Duration Threshold: $freezeDurationHours hours")
+            Slider(
+                value = freezeDurationHours.toFloat(),
+                onValueChange = { freezeDurationHours = it.toInt() },
+                valueRange = 1f..12f,
+                steps = 11,
                 modifier = Modifier.fillMaxWidth()
             )
             
@@ -145,6 +157,7 @@ fun SettingsScreen(
                     coroutineScope.launch {
                         // Save to UserPreferences
                         userPreferences.updateFreezeThreshold(freezeThreshold)
+                        userPreferences.updateFreezeDurationHours(freezeDurationHours)
                         userPreferences.updateRainProbabilityThreshold(rainProbabilityThreshold)
                         userPreferences.updateEnableRainNotifications(enableRainNotifications)
                         userPreferences.updateEnableFreezeNotifications(enableFreezeNotifications)
@@ -156,7 +169,8 @@ fun SettingsScreen(
                             rainProbabilityThreshold = rainProbabilityThreshold,
                             enableRainNotifications = enableRainNotifications,
                             enableFreezeNotifications = enableFreezeNotifications,
-                            useCustomSounds = customSounds
+                            useCustomSounds = customSounds,
+                            freezeDurationHours = freezeDurationHours
                         )
                     }
                     onBackPressed()

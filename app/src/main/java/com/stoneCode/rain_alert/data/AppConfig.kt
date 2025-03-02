@@ -8,11 +8,13 @@ import androidx.datastore.preferences.core.longPreferencesKey
 object AppConfig {
     // Default weather thresholds
     const val FREEZE_THRESHOLD_F = 35.0
+    const val FREEZE_DURATION_HOURS = 4
     const val RAIN_PROBABILITY_THRESHOLD = 50
 
     // Default service intervals
     const val RAIN_CHECK_INTERVAL_MS = 15 * 60 * 1000L  // 15 minutes
     const val FREEZE_CHECK_INTERVAL_MS = 60 * 60 * 1000L  // 1 hour
+    const val STATION_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000L  // 6 hours
 
     // API Constants
     const val USER_AGENT = "RainAlertApp"
@@ -27,6 +29,7 @@ object AppConfig {
 
     // DataStore preference keys
     val FREEZE_THRESHOLD_KEY = doublePreferencesKey("freeze_threshold")
+    val FREEZE_DURATION_HOURS_KEY = intPreferencesKey("freeze_duration_hours")
     val RAIN_PROBABILITY_THRESHOLD_KEY = intPreferencesKey("rain_probability_threshold")
     val RAIN_CHECK_INTERVAL_KEY = longPreferencesKey("rain_check_interval")
     val FREEZE_CHECK_INTERVAL_KEY = longPreferencesKey("freeze_check_interval")
