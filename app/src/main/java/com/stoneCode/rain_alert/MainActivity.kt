@@ -15,14 +15,21 @@ import android.content.Intent
 import android.widget.Toast
 import android.net.Uri
 import androidx.annotation.RequiresApi
+import androidx.compose.runtime.Composable
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.stoneCode.rain_alert.firebase.FirebaseLogger
 import com.stoneCode.rain_alert.service.RainService
 import com.stoneCode.rain_alert.ui.MainScreen
+import com.stoneCode.rain_alert.ui.SettingsScreen
 import com.stoneCode.rain_alert.repository.WeatherRepository
 import com.stoneCode.rain_alert.viewmodel.WeatherViewModel
 
 class MainActivity : ComponentActivity() {
     private lateinit var weatherViewModel: WeatherViewModel
     private lateinit var weatherRepository: WeatherRepository
+    private lateinit var firebaseLogger: FirebaseLogger
 
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private val requestPermissionLauncher = registerForActivityResult(
@@ -72,21 +79,44 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         weatherViewModel = WeatherViewModel(application)
         weatherRepository = WeatherRepository(this)
+        
+        // Initialize Firebase Logger
+        firebaseLogger = FirebaseLogger.getInstance()
+        firebaseLogger.initialize(this)
+        
         enableEdgeToEdge()
         setContent {
             Rain_AlertTheme {
+                AppNavigation()
+            }
+        }
+    }
+
+    @Composable
+    fun AppNavigation() {
+        val navController = rememberNavController()
+        
+        NavHost(navController = navController, startDestination = "main") {
+            composable("main") {
                 MainScreen(
                     onStartServiceClick = {
                         Log.d("MainActivity", "Start Service button clicked")
-                        if (hasRequiredPermissions()) {
+                        if (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                                hasRequiredPermissions()
+                            } else {
+                                TODO("VERSION.SDK_INT < UPSIDE_DOWN_CAKE")
+                            }
+                        ) {
                             startRainService()
                         } else {
-                            requestRequiredPermissions()
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                                requestRequiredPermissions()
+                            }
                         }
                     },
                     onStopServiceClick = {
                         Log.d("MainActivity", "Stopping RainService")
-                        val stopIntent = Intent(this, RainService::class.java)
+                        val stopIntent = Intent(this@MainActivity, RainService::class.java)
                         stopIntent.action = "STOP_SERVICE"
                         stopService(stopIntent)
                     },
@@ -96,7 +126,7 @@ class MainActivity : ComponentActivity() {
                     },
                     onSimulateFreezeClick = {
                         Log.d("MainActivity", "Simulating Freeze Warning")
-                        val simulateFreezeIntent = Intent(this, RainService::class.java)
+                        val simulateFreezeIntent = Intent(this@MainActivity, RainService::class.java)
                         simulateFreezeIntent.action = "SIMULATE_FREEZE"
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                             startForegroundService(simulateFreezeIntent)
@@ -108,7 +138,17 @@ class MainActivity : ComponentActivity() {
                         Log.d("MainActivity", "Open Weather Website button clicked")
                         openWeatherWebsite()
                     },
-                    weatherViewModel = weatherViewModel // Pass it here
+                    onSettingsClick = {
+                        navController.navigate("settings")
+                    },
+                    weatherViewModel = weatherViewModel
+                )
+            }
+            composable("settings") {
+                SettingsScreen(
+                    onBackPressed = {
+                        navController.popBackStack()
+                    }
                 )
             }
         }
@@ -189,6 +229,9 @@ class MainActivity : ComponentActivity() {
         } else {
             startService(serviceIntent)
         }
+        
+        // Log service start to Firebase
+        firebaseLogger.logServiceStatusChanged(true)
     }
 
     private fun simulateRain() {

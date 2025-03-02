@@ -19,12 +19,15 @@ import androidx.core.content.ContextCompat
 import com.StoneCode.rain_alert.R
 import com.stoneCode.rain_alert.MainActivity
 import com.stoneCode.rain_alert.data.AppConfig
+import com.stoneCode.rain_alert.data.UserPreferences
+import com.stoneCode.rain_alert.firebase.FirebaseLogger
 import com.stoneCode.rain_alert.repository.WeatherRepository
 import com.stoneCode.rain_alert.util.EnhancedNotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
@@ -38,6 +41,8 @@ class RainService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
     private lateinit var weatherRepository: WeatherRepository
     private lateinit var notificationHelper: EnhancedNotificationHelper
+    private lateinit var userPreferences: UserPreferences
+    private lateinit var firebaseLogger: FirebaseLogger
 
     companion object {
         var isRunning = false
@@ -56,8 +61,15 @@ class RainService : Service() {
         super.onCreate()
         weatherRepository = WeatherRepository(this)
         notificationHelper = EnhancedNotificationHelper(this)
+        userPreferences = UserPreferences(this)
+        firebaseLogger = FirebaseLogger.getInstance()
+        
         isRunning = true
         statusListener?.onServiceStatusChanged(true)
+        
+        // Log service started to Firebase
+        firebaseLogger.logServiceStatusChanged(true)
+        
         Log.d("RainService", "RainService created")
     }
 
@@ -93,11 +105,14 @@ class RainService : Service() {
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun startRainCheck() {
         serviceScope.launch {
+            // Get current rain check interval from preferences
+            val rainCheckInterval = userPreferences.rainCheckInterval.first()
+            
             while (true) {
                 if (isRaining()) {
                     sendRainNotification()
                 }
-                delay(AppConfig.RAIN_CHECK_INTERVAL_MS)
+                delay(rainCheckInterval)
                 Log.d("RainService", "Rain check performed")
             }
         }
@@ -106,11 +121,14 @@ class RainService : Service() {
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun startFreezeCheck() {
         serviceScope.launch {
+            // Get current freeze check interval from preferences
+            val freezeCheckInterval = userPreferences.freezeCheckInterval.first()
+            
             while (true) {
                 if (isFreezing()) {
                     sendFreezeWarningNotification()
                 }
-                delay(AppConfig.FREEZE_CHECK_INTERVAL_MS)
+                delay(freezeCheckInterval)
                 Log.d("RainService", "Freeze check performed")
             }
         }
@@ -124,6 +142,16 @@ class RainService : Service() {
         ) {
             val isRaining = weatherRepository.checkForRain()
             Log.d("RainService", "isRaining check: $isRaining")
+            
+            // Log weather check to Firebase
+            val precipitationChance = weatherRepository.getPrecipitationChance()
+            firebaseLogger.logWeatherCheck(
+                isRaining = isRaining,
+                isFreezing = false,
+                precipitationChance = precipitationChance,
+                temperature = null
+            )
+            
             return isRaining
         } else {
             Log.w("RainService", "Location permission not granted")
@@ -134,12 +162,22 @@ class RainService : Service() {
     private suspend fun isFreezing(): Boolean {
         val isFreezing = weatherRepository.checkForFreezeWarning()
         Log.d("RainService", "isFreezing check: $isFreezing")
+        
+        // Log weather check to Firebase
+        firebaseLogger.logWeatherCheck(
+            isRaining = false,
+            isFreezing = isFreezing,
+            precipitationChance = null,
+            temperature = userPreferences.freezeThreshold.first()
+        )
+        
         return isFreezing
     }
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun simulateRain() {
         serviceScope.launch {
+            firebaseLogger.logSimulation("rain", true)
             sendRainNotification()
             Log.d("RainService", "Rain simulation triggered")
         }
@@ -147,34 +185,35 @@ class RainService : Service() {
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun simulateFreeze() {
-        sendFreezeWarningNotification()
-        Log.d("RainService", "Freeze simulation triggered")
+        serviceScope.launch {
+            firebaseLogger.logSimulation("freeze", true)
+            sendFreezeWarningNotification()
+            Log.d("RainService", "Freeze simulation triggered")
+        }
     }
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-    private fun sendRainNotification() {
+    private suspend fun sendRainNotification() {
         val location = weatherRepository.getLastKnownLocation()
         if (location != null) {
-            serviceScope.launch {
-                val weatherInfo = weatherRepository.getCurrentWeather()
-                val notification = notificationHelper.createRainNotification(
-                    location.latitude,
-                    location.longitude,
-                    weatherInfo
-                )
-                notificationHelper.sendNotification(
-                    AppConfig.RAIN_NOTIFICATION_ID,
-                    notification
-                )
-                Log.d("RainService", "Enhanced rain notification sent")
-            }
+            val weatherInfo = weatherRepository.getCurrentWeather()
+            val notification = notificationHelper.createRainNotification(
+                location.latitude,
+                location.longitude,
+                weatherInfo
+            )
+            notificationHelper.sendNotification(
+                AppConfig.RAIN_NOTIFICATION_ID,
+                notification
+            )
+            Log.d("RainService", "Enhanced rain notification sent")
         } else {
             Log.w("RainService", "Could not get location for rain notification")
         }
     }
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-    private fun sendFreezeWarningNotification() {
+    private suspend fun sendFreezeWarningNotification() {
         val location = weatherRepository.getLastKnownLocation()
         if (location != null) {
             val notification = notificationHelper.createFreezeWarningNotification(
@@ -200,6 +239,10 @@ class RainService : Service() {
         serviceJob.cancel()
         isRunning = false
         statusListener?.onServiceStatusChanged(false)
+        
+        // Log service stopped to Firebase
+        firebaseLogger.logServiceStatusChanged(false)
+        
         Log.d("RainService", "RainService destroyed")
 
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

@@ -5,8 +5,16 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -27,9 +35,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.StoneCode.rain_alert.R
 import com.stoneCode.rain_alert.viewmodel.WeatherViewModel
 import kotlinx.coroutines.delay
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
 
 @Composable
 fun MainScreen(
@@ -38,11 +43,13 @@ fun MainScreen(
     onSimulateFreezeClick: () -> Unit,
     onSimulateRainClick: () -> Unit,
     onOpenWeatherWebsiteClick: () -> Unit,
+    onSettingsClick: () -> Unit,
     weatherViewModel: WeatherViewModel = viewModel()
 ) {
     val isServiceRunning by weatherViewModel.isServiceRunning.observeAsState(false)
     val lastUpdateTime by weatherViewModel.lastUpdateTime.observeAsState("")
-    val isDataReady by weatherViewModel.isDataReady.observeAsState(false) // Observe isDataReady
+    val isDataReady by weatherViewModel.isDataReady.observeAsState(false)
+    val apiStatus by weatherViewModel.apiStatus.observeAsState()
     var weatherData by remember { mutableStateOf("Loading...") }
     var isRefreshing by remember { mutableStateOf(false) }
     var longPressDetected by remember { mutableStateOf(false) }
@@ -62,26 +69,19 @@ fun MainScreen(
         }
     }
 
-    // Key the LaunchedEffect on weatherViewModel.weatherData to trigger updates
     LaunchedEffect(weatherViewModel.weatherData, isRefreshing, isDataReady) {
         weatherViewModel.weatherData.value?.let { data ->
             if (!isRefreshing) {
-                // If not refreshing, update immediately
                 weatherData = data
             } else {
                 if (!longPressDetected) {
-                    // Short delay before starting to scramble
                     delay(500)
                 }
 
                 if (isDataReady) {
-                    // If data is ready, update weatherData and stop refreshing
                     weatherData = data
                     isRefreshing = false
-                    longPressDetected = false // Reset long press flag
-                } else {
-                    // If data is not ready, keep the previous data or "Loading..."
-                    // (Optional) You could also show a loading indicator here if needed
+                    longPressDetected = false
                 }
             }
         }
@@ -89,6 +89,17 @@ fun MainScreen(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onSettingsClick,
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Settings"
+                )
+            }
+        },
         content = { innerPadding ->
             Box(modifier = Modifier.fillMaxSize()) {
                 // Background Image
@@ -102,7 +113,8 @@ fun MainScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(innerPadding),
+                        .padding(innerPadding)
+                        .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -138,6 +150,14 @@ fun MainScreen(
                         onSimulateFreezeClick = onSimulateFreezeClick,
                         onOpenWeatherWebsiteClick = onOpenWeatherWebsiteClick
                     )
+                    
+                    // API Status Section
+                    apiStatus?.let { status ->
+                        ApiStatusWidget(apiStatus = status)
+                    }
+                    
+                    // Add space at the bottom for better scrolling
+                    Spacer(modifier = Modifier.height(80.dp))
                 }
             }
         }

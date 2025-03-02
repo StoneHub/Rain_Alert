@@ -6,9 +6,11 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import com.stoneCode.rain_alert.firebase.FirebaseLogger
 import com.stoneCode.rain_alert.service.RainService
 import com.stoneCode.rain_alert.service.ServiceStatusListener
 import com.stoneCode.rain_alert.repository.WeatherRepository
+import com.stoneCode.rain_alert.ui.ApiStatus
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -23,10 +25,18 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     val lastUpdateTime = MutableLiveData("")
     val weatherData = MutableLiveData("Loading...")
     private val weatherRepository = WeatherRepository(application.applicationContext)
+    private val firebaseLogger = FirebaseLogger.getInstance()
 
     private var serviceCheckJob: Job? = null
 
-    // new code added below:
+    // API status tracking
+    val apiStatus = MutableLiveData<ApiStatus>(ApiStatus(
+        isConnected = false,
+        lastUpdated = System.currentTimeMillis(),
+        errorMessage = "Not connected yet"
+    ))
+
+    // Data loading status
     val isDataReady = MutableLiveData(false)
 
     private fun setIsDataReady(ready: Boolean) {
@@ -53,6 +63,7 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
         setIsDataReady(false) // Set to false when starting to fetch data
 
         viewModelScope.launch {
+            val startTime = System.currentTimeMillis()
             delay(500) // Introduce a small delay
 
             // Check if the service is running and update the LiveData
@@ -65,11 +76,46 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
             lastUpdateTime.postValue(currentTime)
             Log.d("WeatherViewModel", "Last update time: $currentTime")
 
-            // Fetch real weather data from the repository
-            val currentWeather = weatherRepository.getCurrentWeather()
-            weatherData.postValue(currentWeather)
-            Log.d("WeatherViewModel", "Weather data updated: $currentWeather")
-            setIsDataReady(true) // Set to true when data is fetched
+            try {
+                // Fetch real weather data from the repository
+                val currentWeather = weatherRepository.getCurrentWeather()
+                weatherData.postValue(currentWeather)
+                Log.d("WeatherViewModel", "Weather data updated: $currentWeather")
+                
+                // Update API status with success
+                val responseTime = System.currentTimeMillis() - startTime
+                apiStatus.postValue(ApiStatus(
+                    isConnected = true,
+                    lastUpdated = System.currentTimeMillis(),
+                    responseTime = responseTime,
+                    rainProbability = weatherRepository.getPrecipitationChance(),
+                    temperature = null
+                ))
+                
+                // Log API success to Firebase
+                firebaseLogger.logApiStatus(isSuccess = true, endpoint = "getCurrentWeather")
+                
+                setIsDataReady(true) // Set to true when data is fetched
+            } catch (e: Exception) {
+                Log.e("WeatherViewModel", "Error fetching weather data", e)
+                
+                // Update API status with error
+                apiStatus.postValue(ApiStatus(
+                    isConnected = false,
+                    lastUpdated = System.currentTimeMillis(),
+                    errorMessage = e.message ?: "Unknown error"
+                ))
+                
+                // Log API failure to Firebase
+                firebaseLogger.logApiStatus(
+                    isSuccess = false, 
+                    errorMessage = e.message, 
+                    endpoint = "getCurrentWeather"
+                )
+                
+                weatherData.postValue("Error fetching weather data: ${e.message}")
+                setIsDataReady(true) // Set to true even on error to continue UI flow
+            }
         }
     }
 

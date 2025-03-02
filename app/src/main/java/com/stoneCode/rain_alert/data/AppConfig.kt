@@ -1,5 +1,6 @@
 package com.stoneCode.rain_alert.data
 
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -28,4 +29,7 @@ object AppConfig {
     val RAIN_PROBABILITY_THRESHOLD_KEY = intPreferencesKey("rain_probability_threshold")
     val RAIN_CHECK_INTERVAL_KEY = longPreferencesKey("rain_check_interval")
     val FREEZE_CHECK_INTERVAL_KEY = longPreferencesKey("freeze_check_interval")
+    val ENABLE_RAIN_NOTIFICATIONS_KEY = booleanPreferencesKey("enable_rain_notifications")
+    val ENABLE_FREEZE_NOTIFICATIONS_KEY = booleanPreferencesKey("enable_freeze_notifications")
+    val USE_CUSTOM_SOUNDS_KEY = booleanPreferencesKey("use_custom_sounds")
 }

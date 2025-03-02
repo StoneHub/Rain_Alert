@@ -17,7 +17,7 @@ import java.util.TimeZone
 
 class WeatherRepository(private val context: Context) {
     private val TAG = "WeatherRepository"
-    private val weatherApiService = WeatherApiService()
+    private val weatherApiService = WeatherApiService(context)
     private var lastFreezeCheckTime: Long = 0
     private var isFreezing: Boolean = false
     private var precipitationChance: Int? = null
