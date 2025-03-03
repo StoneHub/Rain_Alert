@@ -22,7 +22,6 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -33,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.stoneCode.rain_alert.data.StationObservation
 import com.stoneCode.rain_alert.viewmodel.WeatherViewModel
@@ -45,41 +45,28 @@ fun WeatherCarousel(
     longPressDetected: Boolean,
     onLongPress: () -> Unit,
     weatherViewModel: WeatherViewModel,
-    onSizeCalculated: (androidx.compose.ui.unit.Dp) -> Unit,
-    containerSize: androidx.compose.ui.unit.Dp,
+    onSizeCalculated: (Dp) -> Unit,
+    containerSize: Dp,
     stationData: List<StationObservation>,
     onChangeLocationClick: () -> Unit,
     onSelectStationsClick: () -> Unit
 ) {
-    val pagerState = rememberPagerState(pageCount = { 3 })
+    val pagerState = rememberPagerState(pageCount = { 2 })
     rememberCoroutineScope()
     
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
 
-        // The pager with three cards - all with fixed height
+        // The pager with two cards - dynamic height
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (containerSize < 250.dp) 250.dp else containerSize) // Use larger minimum height
+                .height(380.dp) // Much larger fixed height to accommodate stations
         ) { page ->
             when (page) {
                 0 -> {
-                    // Weather Banner
-                    WeatherBanner(
-                        weatherData = weatherData,
-                        lastUpdateTime = lastUpdateTime,
-                        isRefreshing = isRefreshing,
-                        longPressDetected = longPressDetected,
-                        onLongPress = onLongPress,
-                        weatherViewModel = weatherViewModel,
-                        onSizeCalculated = onSizeCalculated,
-                        containerSize = containerSize,
-                        showLocationButton = true,
-                        onLocationClick = onChangeLocationClick
-                    )
-                }
-                1 -> {
                     // Weather Radar Map
                     Card(
                         modifier = Modifier
@@ -116,7 +103,7 @@ fun WeatherCarousel(
                         }
                     }
                 }
-                2 -> {
+                1 -> {
                     // Station Data with selection button
                     // Station Data card - show either data or empty state with same size
                     Card(
@@ -166,9 +153,8 @@ fun WeatherCarousel(
         // Card titles
         Text(
             text = when (pagerState.currentPage) {
-                0 -> "Current Weather"
-                1 -> "Weather Radar"
-                2 -> "Nearby Stations"
+                0 -> "Weather Radar"
+                1 -> "Nearby Stations"
                 else -> ""
             },
             style = MaterialTheme.typography.titleMedium,
@@ -185,7 +171,7 @@ fun WeatherCarousel(
                 .padding(bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            repeat(3) { page ->
+            repeat(2) { page ->
                 val selected = page == pagerState.currentPage
                 Box(
                     modifier = Modifier
