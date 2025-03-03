@@ -33,18 +33,26 @@ class MultiStationWeatherService(private val context: Context) {
     
     /**
      * Fetches weather observations from the nearest stations to the given location
+     * 
+     * @param latitude Latitude of the location
+     * @param longitude Longitude of the location
+     * @param forceRefresh If true, forces a refresh of stations ignoring cache
+     * @return Result containing list of station observations or an error
      */
     suspend fun getNearbyStationsObservations(
         latitude: Double,
-        longitude: Double
+        longitude: Double,
+        forceRefresh: Boolean = false
     ): Result<List<StationObservation>> = withContext(Dispatchers.IO) {
         try {
-            // Get the nearest stations (using cache if available)
-            val stations = getNearbyStations(latitude, longitude)
+            // Get the nearest stations (using cache if available, unless forceRefresh is true)
+            val stations = getNearbyStations(latitude, longitude, forceRefresh)
             
             if (stations.isEmpty()) {
                 return@withContext Result.failure(Exception("No nearby weather stations found"))
             }
+            
+            Log.d(TAG, "Found ${stations.size} nearby stations to fetch observations from")
             
             // Fetch observations from each station in parallel
             val observations = stations.map { station ->
@@ -67,25 +75,47 @@ class MultiStationWeatherService(private val context: Context) {
     }
     
     /**
-     * Get nearby weather stations, using cached results if available
+     * Get nearby weather stations, using cached results if available and not forced to refresh
+     * 
+     * @param latitude Latitude of the location
+     * @param longitude Longitude of the location
+     * @param forceRefresh If true, ignore cache and fetch fresh data
+     * @return List of nearby weather stations
      */
-    private suspend fun getNearbyStations(latitude: Double, longitude: Double): List<WeatherStation> {
+    private suspend fun getNearbyStations(
+        latitude: Double, 
+        longitude: Double, 
+        forceRefresh: Boolean = false
+    ): List<WeatherStation> {
         val currentTime = System.currentTimeMillis()
         
-        // Check if cache is valid (less than STATION_REFRESH_INTERVAL_MS old)
-        if (cachedNearbyStations.isNotEmpty() && 
+        // Check if cache is valid and we're not forced to refresh
+        if (!forceRefresh && 
+            cachedNearbyStations.isNotEmpty() && 
             currentTime - lastStationUpdateTime < AppConfig.STATION_REFRESH_INTERVAL_MS) {
             Log.d(TAG, "Using cached nearby stations (${cachedNearbyStations.size})")
             return cachedNearbyStations
         }
         
+        // If forcing refresh or cache is invalid, log the reason
+        if (forceRefresh) {
+            Log.d(TAG, "Force refreshing nearby stations")
+        } else {
+            Log.d(TAG, "Cache expired, fetching fresh nearby stations")
+        }
+        
         // Fetch new stations
         return try {
-            val stationsResult = stationFinder.findNearestStations(latitude, longitude)
+            val stationsResult = stationFinder.findNearestStations(
+                latitude = latitude, 
+                longitude = longitude,
+                limit = 10 // Increased limit to give more options for selection
+            )
             
             if (stationsResult.isSuccess) {
                 cachedNearbyStations = stationsResult.getOrNull() ?: emptyList()
                 lastStationUpdateTime = currentTime
+                Log.d(TAG, "Updated station cache with ${cachedNearbyStations.size} stations")
                 cachedNearbyStations
             } else {
                 Log.e(TAG, "Failed to find nearby stations: ${stationsResult.exceptionOrNull()?.message}")

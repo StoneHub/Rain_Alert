@@ -173,6 +173,14 @@ fun MainScreen(
                     val availableStations by weatherViewModel.availableStations.observeAsState(emptyList())
                     val selectedStationIds by weatherViewModel.selectedStationIds.observeAsState(emptyList())
                     
+                    // Launch effect to fetch fresh stations when dialog is about to show
+                    LaunchedEffect(showStationSelectDialog) {
+                        if (showStationSelectDialog) {
+                            // Fetch fresh stations when dialog opens
+                            weatherViewModel.fetchAvailableStations()
+                        }
+                    }
+                    
                     // Weather Carousel
                     WeatherCarousel(
                         weatherData = weatherData,

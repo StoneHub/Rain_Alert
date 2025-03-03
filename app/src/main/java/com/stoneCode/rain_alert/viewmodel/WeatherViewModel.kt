@@ -248,7 +248,9 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
      */
     fun updateSelectedStations(stationIds: List<String>) {
         viewModelScope.launch {
-            // Update the internal value
+            Log.d("WeatherViewModel", "Updating selected stations: $stationIds")
+            
+            // Update the internal value first
             selectedStationIds.value = stationIds
             
             // Save to preferences
@@ -256,18 +258,25 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
             
             // Force reload station data from weather repository
             val updatedStations = weatherRepository.refreshStationData(stationIds)
-            stationData.postValue(updatedStations)
             
-            // Refresh all weather data
+            // Update UI with new stations
+            stationData.postValue(updatedStations)
+            Log.d("WeatherViewModel", "Updated station data with ${updatedStations.size} stations")
+            
+            // Refresh all weather data to ensure everything is in sync
             refreshWeatherData()
         }
     }
     
     /**
      * Fetch available stations around the current location
+     * This is public so it can be explicitly called when needed
      */
-    private suspend fun fetchAvailableStations() {
+    suspend fun fetchAvailableStations() {
         try {
+            // Clear the loading state
+            Log.d("WeatherViewModel", "Fetching available stations for the current location")
+            
             val location = weatherRepository.getCurrentLocation() ?: return
             val stationsResult = weatherStationFinder.findNearestStations(
                 latitude = location.latitude,
@@ -279,9 +288,13 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                 val stations = stationsResult.getOrNull() ?: emptyList()
                 availableStations.postValue(stations)
                 Log.d("WeatherViewModel", "Fetched ${stations.size} available stations for selection")
+            } else {
+                Log.e("WeatherViewModel", "Failed to fetch stations: ${stationsResult.exceptionOrNull()?.message}")
+                availableStations.postValue(emptyList())
             }
         } catch (e: Exception) {
             Log.e("WeatherViewModel", "Error fetching available stations", e)
+            availableStations.postValue(emptyList())
         }
     }
     

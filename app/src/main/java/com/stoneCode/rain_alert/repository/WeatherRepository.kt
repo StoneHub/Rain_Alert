@@ -372,28 +372,46 @@ class WeatherRepository(private val context: Context) {
         val location = getCurrentLocation() ?: return emptyList()
         
         try {
-            // First get all nearby stations
+            Log.d(TAG, "Refreshing station data for IDs: $stationIds")
+            
+            // Always get fresh station data regardless of cache
             val result = multiStationWeatherService.getNearbyStationsObservations(
                 latitude = location.latitude,
-                longitude = location.longitude
+                longitude = location.longitude,
+                forceRefresh = true // Force fresh data
             )
             
             if (result.isSuccess) {
                 val allStations = result.getOrNull() ?: emptyList()
+                Log.d(TAG, "Retrieved ${allStations.size} stations from API")
                 
                 // Filter to only include selected stations
                 val filteredStations = if (stationIds.isNotEmpty()) {
+                    // Check if all requested stations were found
+                    val foundIds = allStations.map { it.station.id }
+                    val missingIds = stationIds.filter { !foundIds.contains(it) }
+                    
+                    if (missingIds.isNotEmpty()) {
+                        Log.w(TAG, "Some selected stations were not found: $missingIds")
+                    }
+                    
+                    // Filter and sort by the order in stationIds
                     allStations.filter { stationIds.contains(it.station.id) }
                         .sortedBy { stationIds.indexOf(it.station.id) }
                 } else {
+                    // If no specific stations requested, use all stations
                     allStations
                 }
+                
+                Log.d(TAG, "Filtered to ${filteredStations.size} selected stations")
                 
                 // Update the cached stations
                 currentStations = filteredStations
                 stationsLastUpdated = System.currentTimeMillis()
                 
                 return filteredStations
+            } else {
+                Log.e(TAG, "Failed to get stations: ${result.exceptionOrNull()?.message}")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error refreshing station data", e)

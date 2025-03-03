@@ -1,6 +1,7 @@
 package com.stoneCode.rain_alert.ui.dialogs
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -38,8 +39,16 @@ fun StationSelectDialog(
     onDismiss: () -> Unit,
     onConfirm: (List<String>) -> Unit
 ) {
-    val selectedIds = remember { mutableStateListOf<String>().apply { 
-        addAll(selectedStationIds.take(3)) 
+    // Create a list to track selected station IDs
+    // Start by copying the previously selected ids, but only if they exist in the current station list
+    val selectedIds = remember { mutableStateListOf<String>().apply {
+        // Only include previously selected stations that still exist in the current station list
+        val validSelectedIds = selectedStationIds.filter { id -> 
+            stations.any { it.id == id }
+        }
+        if (validSelectedIds.isNotEmpty()) {
+            addAll(validSelectedIds.take(3))
+        }
     }}
     
     AlertDialog(
@@ -134,11 +143,23 @@ fun StationSelectDialog(
                 
                 Spacer(modifier = Modifier.height(8.dp))
                 
-                Text(
-                    text = "Selected ${selectedIds.size}/3 stations",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Selected ${selectedIds.size}/3 stations",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    TextButton(
+                        onClick = { selectedIds.clear() }
+                    ) {
+                        Text("Reset")
+                    }
+                }
             }
         },
         confirmButton = {
