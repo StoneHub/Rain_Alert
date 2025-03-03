@@ -1,3 +1,4 @@
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -54,6 +55,11 @@ android {
 
 dependencies {
 
+    // Pager for horizontal carousel
+    implementation(libs.androidx.foundation)
+    implementation(libs.accompanist.pager)
+    implementation(libs.accompanist.pager.indicators)
+
     implementation(libs.androidx.material.icons.extended)
 
     // Retrofit for API calls
@@ -71,12 +77,12 @@ dependencies {
     implementation(libs.play.services.location)
     
 // Firebase    
-    implementation(platform("com.google.firebase:firebase-bom:32.7.1"))
-    implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-analytics-ktx")
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.analytics.ktx)
     
 // Navigation
-    implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation(libs.androidx.navigation.compose)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx.v262)

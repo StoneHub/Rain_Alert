@@ -2,9 +2,13 @@ package com.stoneCode.rain_alert.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.AcUnit
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,7 +24,9 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    onBackPressed: () -> Unit
+    onBackPressed: () -> Unit,
+    onSimulateRainClick: () -> Unit = {},
+    onSimulateFreezeClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -150,6 +156,59 @@ fun SettingsScreen(
             }
             
             Divider(modifier = Modifier.padding(vertical = 8.dp))
+            
+            Divider(modifier = Modifier.padding(vertical = 8.dp))
+            
+            // Developer Tools Section
+            Text(
+                text = "Developer Tools",
+                style = MaterialTheme.typography.titleLarge
+            )
+            
+            Text(
+                "Use these tools to test notification functionality",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Simulation buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Simulate Rain button
+                OutlinedButton(
+                    onClick = onSimulateRainClick,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.WaterDrop,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Simulate Rain")
+                }
+                
+                // Simulate Freeze button
+                OutlinedButton(
+                    onClick = onSimulateFreezeClick,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AcUnit,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.tertiary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Simulate Freeze")
+                }
+            }
+            
+            Divider(modifier = Modifier.padding(vertical = 16.dp))
             
             // Save button
             Button(

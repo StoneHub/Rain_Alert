@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,10 +19,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -102,28 +109,34 @@ fun MainScreen(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        floatingActionButton = {
-            Column {
-                // History button
-                FloatingActionButton(
-                    onClick = onViewHistoryClick,
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.History,
-                        contentDescription = "View Alert History"
-                    )
-                }
+        topBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding() // This will add necessary padding for status bar
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // App Title
+                AppTitle(compact = true)
                 
-                // Settings button
-                FloatingActionButton(
-                    onClick = onSettingsClick,
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Settings"
-                    )
+                // Navigation icons
+                Row {
+                    IconButton(onClick = onViewHistoryClick) {
+                        Icon(
+                            imageVector = Icons.Default.History,
+                            contentDescription = "View Alert History",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
                 }
             }
         },
@@ -145,10 +158,9 @@ fun MainScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // App Title
-                    AppTitle()
-
-                    // Weather Banner Section
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    // Weather Banner Section - Quick summary of current conditions
                     WeatherBanner(
                         weatherData = weatherData,
                         lastUpdateTime = lastUpdateTime,
@@ -167,16 +179,64 @@ fun MainScreen(
                         },
                         containerSize = initialContainerSize
                     )
+                    
+                    // Weather Radar Map Placeholder
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .padding(horizontal = 16.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = Icons.Default.Map,
+                                    contentDescription = "Weather Radar Map",
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("Weather Radar Map", style = MaterialTheme.typography.bodyLarge)
+                                Text("Coming Soon", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
 
-                    // Control Buttons Section
-                    ControlButtons(
-                        isServiceRunning = isServiceRunning,
-                        onStartServiceClick = onStartServiceClick,
-                        onStopServiceClick = onStopServiceClick,
-                        onSimulateRainClick = onSimulateRainClick,
-                        onSimulateFreezeClick = onSimulateFreezeClick,
-                        onOpenWeatherWebsiteClick = onOpenWeatherWebsiteClick
-                    )
+                    // Control Buttons Section - Simplified for service control only
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "Service Control",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = if (isServiceRunning) onStopServiceClick else onStartServiceClick,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isServiceRunning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                Text(if (isServiceRunning) "Stop Weather Alerts" else "Start Weather Alerts")
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = onOpenWeatherWebsiteClick,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Open Weather Website")
+                            }
+                        }
+                    }
                     
                     // API Status Section with refresh button - Removed external header as it's inside the component now
                     apiStatus?.let { status ->
@@ -197,56 +257,6 @@ fun MainScreen(
                     // Station Data Component
                     if (stationData.isNotEmpty()) {
                         StationDataComponent(stations = stationData)
-                    }
-                    
-                    // Current Weather Details Card
-                    if (!isRefreshing && weatherData.isNotEmpty() && weatherData != "Loading...") {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Current Weather",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    
-                                    // Location indicator if available
-                                    weatherViewModel.currentLocation.value?.let { location ->
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Icons.Default.LocationOn,
-                                                contentDescription = "Location",
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = location,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-                                
-                                Spacer(modifier = Modifier.height(8.dp))
-                                
-                                Text(
-                                    text = weatherData,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                        }
                     }
                     
                     // Add space at the bottom for better scrolling

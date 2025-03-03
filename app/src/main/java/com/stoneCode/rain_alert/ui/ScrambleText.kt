@@ -35,7 +35,7 @@ fun ScrambleText(
     val fontSize = 18.sp // Constant font size
 
     // Get the color from the MaterialTheme outside of remember
-    val textColor = MaterialTheme.colorScheme.onSecondary
+    val textColor = MaterialTheme.colorScheme.onPrimary
 
     // Define the TextStyle but don't use MaterialTheme inside remember
     val textStyle = remember(textColor) {

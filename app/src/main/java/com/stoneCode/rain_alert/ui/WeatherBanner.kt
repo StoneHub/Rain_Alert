@@ -53,9 +53,9 @@ fun WeatherBanner(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 32.dp)
+            .padding(horizontal = 24.dp)
             .background(
-                MaterialTheme.colorScheme.secondary,
+                MaterialTheme.colorScheme.primary,
                 shape = RoundedCornerShape(12.dp)
             )
             .clip(RoundedCornerShape(12.dp))
@@ -73,12 +73,13 @@ fun WeatherBanner(
                 val heightDp = with(density) { coordinates.size.height.toDp() }
                 onSizeCalculated(heightDp)
             }
-            .height(containerSize),
+            // Set a minimum height to ensure visibility
+            .height(if (containerSize < 150.dp) 150.dp else containerSize),
         contentAlignment = Alignment.Center
     ) {
         // Manual Ripple Effect with Overlay
         Surface(
-            color = MaterialTheme.colorScheme.secondary,
+            color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
                 .wrapContentSize()
                 .clip(RoundedCornerShape(12.dp)),
@@ -102,7 +103,7 @@ fun WeatherBanner(
                 text = "Latest Weather Data",
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSecondary
+                    color = MaterialTheme.colorScheme.onPrimary
                 )
             )
             if (isRefreshing) {
@@ -121,7 +122,7 @@ fun WeatherBanner(
                 Text(
                     text = weatherData,
                     style = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSecondary
+                        color = MaterialTheme.colorScheme.onPrimary
                     ),
                     textAlign = TextAlign.Center
                 )
@@ -130,7 +131,7 @@ fun WeatherBanner(
             Text(
                 text = "Last Updated: $lastUpdateTime",
                 style = MaterialTheme.typography.bodySmall.copy(
-                    color = MaterialTheme.colorScheme.onSecondary
+                    color = MaterialTheme.colorScheme.onPrimary
                 )
             )
         }
