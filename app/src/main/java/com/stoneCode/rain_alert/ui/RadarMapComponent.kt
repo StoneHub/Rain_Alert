@@ -8,32 +8,24 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,35 +39,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.MapStyleOptions
-import com.google.android.gms.maps.model.TileProvider
-import com.google.android.gms.maps.model.UrlTileProvider
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
-import com.google.maps.android.compose.Polygon
-import com.google.maps.android.compose.TileOverlay
-import com.google.maps.android.compose.rememberTileOverlayState
 import com.stoneCode.rain_alert.api.WeatherStation
 import com.stoneCode.rain_alert.repository.RadarMapRepository
 import com.stoneCode.rain_alert.viewmodel.RadarMapViewModel
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import java.net.URL
 
 /**
  * A component that displays a radar map with weather data overlays
@@ -99,16 +82,16 @@ fun RadarMapComponent(
     var showWindLayer by remember { mutableStateOf(false) }
     var showStationsLayer by remember { mutableStateOf(true) }
     var showTriangleLayer by remember { mutableStateOf(selectedStations.size >= 3) }
-    
+
     // Get radar data from view model
     val precipitationRadarUrl by radarMapViewModel.precipitationRadarUrl.observeAsState()
     val windRadarUrl by radarMapViewModel.windRadarUrl.observeAsState()
     val isRadarLoading by radarMapViewModel.isLoading.observeAsState(false)
     val errorMessage by radarMapViewModel.errorMessage.observeAsState()
-    
+
     // Get repository instance for calculations
     val radarMapRepository = remember { RadarMapRepository(radarMapViewModel.getApplication()) }
-    
+
     // Initialize with auto-fit zoom based on selected stations
     LaunchedEffect(selectedStations) {
         if (selectedStations.isNotEmpty()) {
@@ -117,21 +100,30 @@ fun RadarMapComponent(
             radarMapViewModel.updateMapZoom(zoom)
         }
     }
-    
+
     // Get map data from view model
     val mapCenter by radarMapViewModel.mapCenter.observeAsState(centerLatLng)
     val mapZoom by radarMapViewModel.mapZoom.observeAsState(if (fullScreen) 8f else 6f)
-    
+
     // Create camera position state using view model data
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(mapCenter, mapZoom)
     }
-    
+
+    // Animate camera position when mapCenter or mapZoom changes
+    LaunchedEffect(mapCenter, mapZoom) {
+        cameraPositionState.animate(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition(mapCenter, mapZoom, 0f, 0f)
+            )
+        )
+    }
+
     // Fetch radar data if needed
     LaunchedEffect(mapCenter) {
         radarMapViewModel.fetchRadarData(mapCenter)
     }
-    
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -161,13 +153,13 @@ fun RadarMapComponent(
                     )
                 }
             }
-            
+
             // Add triangular area between stations if enabled and enough stations
             if (showTriangleLayer && selectedStations.size >= 3) {
-                val stationPositions = selectedStations.take(3).map { 
-                    LatLng(it.latitude, it.longitude) 
+                val stationPositions = selectedStations.take(3).map {
+                    LatLng(it.latitude, it.longitude)
                 }
-                
+
                 Polygon(
                     points = stationPositions,
                     fillColor = Color.Blue.copy(alpha = 0.2f),
@@ -176,12 +168,12 @@ fun RadarMapComponent(
                 )
             }
         }
-        
+
         // Add precipitation radar overlay if layer is enabled and URL is available
         if (showPrecipitationLayer && precipitationRadarUrl != null) {
             Box(modifier = Modifier.fillMaxSize()) {
                 AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
+                    model = coil.request.ImageRequest.Builder(LocalContext.current)
                         .data(precipitationRadarUrl)
                         .crossfade(true)
                         .build(),
@@ -192,12 +184,12 @@ fun RadarMapComponent(
                 )
             }
         }
-        
+
         // Add wind radar overlay if layer is enabled and URL is available
         if (showWindLayer && windRadarUrl != null) {
             Box(modifier = Modifier.fillMaxSize()) {
                 AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
+                    model = coil.request.ImageRequest.Builder(LocalContext.current)
                         .data(windRadarUrl)
                         .crossfade(true)
                         .build(),
@@ -208,7 +200,7 @@ fun RadarMapComponent(
                 )
             }
         }
-        
+
         // Loading indicator
         if (isLoading) {
             Box(
@@ -222,7 +214,7 @@ fun RadarMapComponent(
                 )
             }
         }
-        
+
         // Main map controls for full screen, location, and my location
         // Full screen button (top left)
         IconButton(
@@ -242,7 +234,7 @@ fun RadarMapComponent(
                 tint = MaterialTheme.colorScheme.onSurface
             )
         }
-        
+
         // Location buttons (top right)
         Column(
             modifier = Modifier
@@ -266,7 +258,7 @@ fun RadarMapComponent(
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }
-            
+
             // Manual location button
             IconButton(
                 onClick = onChangeLocationClick,
@@ -284,7 +276,7 @@ fun RadarMapComponent(
                 )
             }
         }
-        
+
         // Layer controls (conditionally visible)
         if (showControls) {
             MapControls(
@@ -305,7 +297,7 @@ fun RadarMapComponent(
                 triangleEnabled = selectedStations.size >= 3
             )
         }
-        
+
         // Toggle for controls visibility
         IconButton(
             onClick = { showControls = !showControls },
@@ -372,7 +364,7 @@ fun MapControls(
                     )
                 }
             }
-            
+
             // Layer toggles
             Text(
                 text = "Layers",
@@ -380,28 +372,28 @@ fun MapControls(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(vertical = 4.dp)
             )
-            
+
             // Precipitation layer toggle
             LayerToggle(
                 label = "Precipitation",
                 checked = showPrecipitation,
                 onCheckedChange = onTogglePrecipitation
             )
-            
+
             // Wind layer toggle
             LayerToggle(
                 label = "Wind",
                 checked = showWind,
                 onCheckedChange = onToggleWind
             )
-            
+
             // Stations layer toggle
             LayerToggle(
                 label = "Stations",
                 checked = showStations,
                 onCheckedChange = onToggleStations
             )
-            
+
             // Triangle overlay toggle
             LayerToggle(
                 label = "Coverage Area",
@@ -429,13 +421,13 @@ fun LayerToggle(
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = if (enabled) 
-                MaterialTheme.colorScheme.onSurface 
-            else 
+            color = if (enabled)
+                MaterialTheme.colorScheme.onSurface
+            else
                 MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
             modifier = Modifier.weight(1f)
         )
-        
+
         Switch(
             checked = checked && enabled,
             onCheckedChange = { if (enabled) onCheckedChange() },
@@ -475,22 +467,22 @@ fun PreviewRadarMapComponent() {
                 stationUrl = ""
             )
         )
-        
+
         Column {
             RadarMapComponent(
                 selectedStations = previewStations,
                 centerLatLng = LatLng(40.1, -98.0)
             )
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             Text(
                 text = "Loading State:",
                 style = MaterialTheme.typography.titleMedium
             )
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             RadarMapComponent(
                 isLoading = true
             )

@@ -76,11 +76,11 @@ dependencies {
     implementation(libs.play.services.location)
     
 // Maps
-    implementation("com.google.maps.android:maps-compose:2.15.0")
-    implementation("com.google.android.gms:play-services-maps:18.2.0")
+    implementation(libs.maps.compose)
+    implementation(libs.play.services.maps)
     
 // Coil for image loading
-    implementation("io.coil-kt:coil-compose:2.4.0")
+    implementation(libs.coil.compose)
     
 // Firebase    
     implementation(platform(libs.firebase.bom))
@@ -100,6 +100,7 @@ dependencies {
     implementation(libs.material3)
     implementation(libs.androidx.startup.runtime)
     implementation(libs.androidx.appcompat)
+    implementation(libs.volley)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit.v115)
     androidTestImplementation(libs.androidx.espresso.core.v351)
