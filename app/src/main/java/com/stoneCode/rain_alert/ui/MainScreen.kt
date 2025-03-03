@@ -176,6 +176,11 @@ fun MainScreen(
                         }
                     }
                     
+                    // Filter stationData to only include selected stations
+                    val displayedStations = stationData.filter { stationObs ->
+                        selectedStationIds.contains(stationObs.station.id)
+                    }
+                    
                     // Weather Carousel
                     WeatherCarousel(
                         weatherData = weatherData,
@@ -194,7 +199,7 @@ fun MainScreen(
                             }
                         },
                         containerSize = initialContainerSize,
-                        stationData = stationData,
+                        stationData = displayedStations,
                         onChangeLocationClick = { showLocationDialog = true },
                         onSelectStationsClick = { showStationSelectDialog = true }
                     )

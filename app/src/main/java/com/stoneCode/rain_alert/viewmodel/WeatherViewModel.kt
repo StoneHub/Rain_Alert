@@ -78,6 +78,11 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
             
             // Make initial weather update after loading preferences
             updateWeatherStatus()
+            
+            // If no stations are selected, automatically select the 3 closest ones
+            if (savedStationIds.isEmpty()) {
+                selectDefaultStations()
+            }
         }
     }
 
@@ -290,5 +295,39 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
         }
         
         return null
+    }
+    
+    /**
+     * Select the 3 closest stations as default
+     */
+    private fun selectDefaultStations() {
+        viewModelScope.launch {
+            Log.d("WeatherViewModel", "Selecting default stations")
+            
+            // Wait for available stations to be populated
+            fetchAvailableStations()
+            // Longer delay to ensure stations are properly loaded
+            delay(2000) 
+            
+            // Try multiple times if needed
+            var attempts = 0
+            while ((availableStations.value.isNullOrEmpty()) && attempts < 3) {
+                Log.d("WeatherViewModel", "Retry fetching available stations, attempt ${attempts + 1}")
+                fetchAvailableStations()
+                delay(1500)
+                attempts++
+            }
+            
+            // Sort stations by distance and take the 3 closest ones
+            val closestStations = availableStations.value?.sortedBy { it.distance }?.take(3) ?: emptyList()
+            
+            if (closestStations.isNotEmpty()) {
+                Log.d("WeatherViewModel", "Selected ${closestStations.size} default stations")
+                val stationIds = closestStations.map { it.id }
+                updateSelectedStations(stationIds)
+            } else {
+                Log.e("WeatherViewModel", "No stations available for default selection")
+            }
+        }
     }
 }

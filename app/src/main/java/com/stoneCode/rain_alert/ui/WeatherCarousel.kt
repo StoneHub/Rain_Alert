@@ -66,12 +66,20 @@ fun WeatherCarousel(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
-        // The pager with two cards - fixed height to accommodate stations
+        // Calculate or track the height of the station data
+        val stationDataHeight = if (stationData.isNotEmpty()) {
+            // Use a reasonable minimum height based on number of stations (approx. 150dp per station)
+            (150 * stationData.size).coerceAtLeast(300).dp
+        } else {
+            300.dp // Fallback minimum height
+        }
+        
+        // The pager with two cards - using fixed height for consistency
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
-                .wrapContentHeight() // Let the pager wrap its content
+                .height(stationDataHeight) // Fixed height based on content
         ) { page ->
             when (page) {
                 0 -> {
@@ -79,14 +87,14 @@ fun WeatherCarousel(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .wrapContentHeight()
+                            .fillMaxHeight() // Fill the entire height of the parent
                             .padding(horizontal = 16.dp),
                         shape = RoundedCornerShape(12.dp),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         Box(modifier = Modifier
                             .fillMaxWidth()
-                            .wrapContentHeight(),
+                            .fillMaxHeight(),
                             contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(
@@ -118,7 +126,7 @@ fun WeatherCarousel(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .wrapContentHeight() // Let the card wrap its content
+                            .fillMaxHeight() // Fill the entire height of the parent
                             .padding(horizontal = 16.dp),
                         shape = RoundedCornerShape(12.dp),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
