@@ -9,6 +9,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import com.stoneCode.rain_alert.api.WeatherStation
+import com.stoneCode.rain_alert.api.WeatherStationFinder
 import com.stoneCode.rain_alert.data.StationObservation
 import com.stoneCode.rain_alert.data.UserPreferences
 import com.stoneCode.rain_alert.firebase.FirebaseLogger
@@ -35,6 +36,7 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     private val weatherRepository = WeatherRepository(application.applicationContext)
     private val alertHistoryRepository = AlertHistoryRepository(application.applicationContext)
     private val firebaseLogger = FirebaseLogger.getInstance()
+    private val weatherStationFinder = WeatherStationFinder()
     
     // User preferences
     private val userPreferences = UserPreferences(application.applicationContext)
@@ -104,6 +106,8 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
         setIsDataReady(false) // Set to false when starting to fetch data
 
         viewModelScope.launch {
+            // Fetch available stations for selection
+            fetchAvailableStations()
             val startTime = System.currentTimeMillis()
             delay(500) // Introduce a small delay
 
@@ -242,6 +246,28 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
             
             // Refresh weather data with new stations
             refreshWeatherData()
+        }
+    }
+    
+    /**
+     * Fetch available stations around the current location
+     */
+    private suspend fun fetchAvailableStations() {
+        try {
+            val location = weatherRepository.getCurrentLocation() ?: return
+            val stationsResult = weatherStationFinder.findNearestStations(
+                latitude = location.latitude,
+                longitude = location.longitude,
+                limit = 10 // Fetch 10 stations for selection
+            )
+            
+            if (stationsResult.isSuccess) {
+                val stations = stationsResult.getOrNull() ?: emptyList()
+                availableStations.postValue(stations)
+                Log.d("WeatherViewModel", "Fetched ${stations.size} available stations for selection")
+            }
+        } catch (e: Exception) {
+            Log.e("WeatherViewModel", "Error fetching available stations", e)
         }
     }
     
