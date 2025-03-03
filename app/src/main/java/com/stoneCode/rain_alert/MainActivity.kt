@@ -150,6 +150,9 @@ class MainActivity : ComponentActivity() {
                     onViewHistoryClick = {
                         navController.navigate("alert_history")
                     },
+                    onOpenStationWebsiteClick = { stationUrl ->
+                        openStationWebsite(stationUrl)
+                    },
                     weatherViewModel = weatherViewModel
                 )
             }
@@ -274,6 +277,17 @@ class MainActivity : ComponentActivity() {
             startForegroundService(serviceIntent)
         } else {
             startService(serviceIntent)
+        }
+    }
+
+    private fun openStationWebsite(stationUrl: String) {
+        Log.d("MainActivity", "Opening Station Website: $stationUrl")
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(stationUrl))
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error opening station URL: $stationUrl", e)
+            Toast.makeText(this, "Could not open station website", Toast.LENGTH_SHORT).show()
         }
     }
 

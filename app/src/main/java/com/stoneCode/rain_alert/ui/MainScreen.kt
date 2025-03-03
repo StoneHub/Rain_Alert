@@ -60,6 +60,7 @@ fun MainScreen(
     onOpenWeatherWebsiteClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onViewHistoryClick: () -> Unit,
+    onOpenStationWebsiteClick: (String) -> Unit,  // New function to open station website
     weatherViewModel: WeatherViewModel = viewModel()
 ) {
     val isServiceRunning by weatherViewModel.isServiceRunning.observeAsState(false)
@@ -201,7 +202,8 @@ fun MainScreen(
                         containerSize = initialContainerSize,
                         stationData = displayedStations,
                         onChangeLocationClick = { showLocationDialog = true },
-                        onSelectStationsClick = { showStationSelectDialog = true }
+                        onSelectStationsClick = { showStationSelectDialog = true },
+                        onStationLongClick = onOpenStationWebsiteClick
                     )
                     
                     // Location Dialog

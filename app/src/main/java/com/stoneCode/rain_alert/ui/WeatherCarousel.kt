@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -57,7 +56,8 @@ fun WeatherCarousel(
     containerSize: Dp,
     stationData: List<StationObservation>,
     onChangeLocationClick: () -> Unit,
-    onSelectStationsClick: () -> Unit
+    onSelectStationsClick: () -> Unit,
+    onStationLongClick: (String) -> Unit = {}
 ) {
     val pagerState = rememberPagerState(pageCount = { 2 })
     rememberCoroutineScope()
@@ -66,10 +66,10 @@ fun WeatherCarousel(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
-        // Calculate or track the height of the station data
+        // Calculate height of the station data - adjust constants to reduce extra space
         val stationDataHeight = if (stationData.isNotEmpty()) {
-            // Use a reasonable minimum height based on number of stations (approx. 150dp per station)
-            (150 * stationData.size).coerceAtLeast(300).dp
+            // Approximation: 135dp per station + 32dp for header = tighter fit
+            (135 * stationData.size + 32).coerceAtLeast(300).dp
         } else {
             300.dp // Fallback minimum height
         }
@@ -134,7 +134,8 @@ fun WeatherCarousel(
                         if (stationData.isNotEmpty()) {
                             StationDataComponent(
                                 stations = stationData,
-                                onSelectStationsClick = onSelectStationsClick
+                                onSelectStationsClick = onSelectStationsClick,
+                                onStationLongClick = onStationLongClick
                             )
                         } else {
                             Box(modifier = Modifier.fillMaxWidth().fillMaxHeight(), contentAlignment = Alignment.Center) {
