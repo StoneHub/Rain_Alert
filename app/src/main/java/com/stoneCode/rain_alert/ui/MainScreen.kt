@@ -261,10 +261,6 @@ fun MainScreen(
                         }
                     }
                     
-                    // API Status widget removed as no longer useful
-                    
-                    // Station Data Component is now part of the carousel
-                    
                     // Add space at the bottom for better scrolling
                     Spacer(modifier = Modifier.height(80.dp))
                 }

@@ -24,16 +24,23 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.stoneCode.rain_alert.data.StationObservation
 import com.stoneCode.rain_alert.viewmodel.WeatherViewModel
 
@@ -58,12 +65,12 @@ fun WeatherCarousel(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
-        // The pager with two cards - dynamic height
+        // The pager with two cards - fixed height to accommodate stations
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(380.dp) // Much larger fixed height to accommodate stations
+                .height(350.dp) // Fixed height for the pager to fit station content
         ) { page ->
             when (page) {
                 0 -> {
@@ -145,7 +152,6 @@ fun WeatherCarousel(
                             }
                         }
                     }
-                    }
                 }
             }
         }
@@ -186,3 +192,50 @@ fun WeatherCarousel(
             }
         }
     }
+}
+
+@Preview(showBackground = true, widthDp = 360, heightDp = 600)
+@Composable
+private fun PreviewWeatherCarousel() {
+    val mockStations = listOf(
+        PreviewAdapters.createPreviewObservation(
+            stationName = "Station One",
+            distance = 1.2,
+            temperature = 50.0,
+            windSpeed = 10.0,
+            windDirection = "N",
+            precipitationLastHour = 0.0,
+            textDescription = "Sunny"
+        ),
+        PreviewAdapters.createPreviewObservation(
+            stationName = "Station Two",
+            distance = 3.4,
+            temperature = 32.0,
+            windSpeed = 12.0,
+            windDirection = "NW",
+            precipitationLastHour = 0.5,
+            textDescription = "Overcast"
+        )
+    )
+    
+    val mockViewModel = viewModel<WeatherViewModel>()
+    var containerSize by remember { mutableStateOf(350.dp) }
+    
+    MaterialTheme {
+        Surface {
+            WeatherCarousel(
+                weatherData = "Current weather: 42°F, Partly Cloudy",
+                lastUpdateTime = "Updated: 10:15 AM",
+                isRefreshing = false,
+                longPressDetected = false,
+                onLongPress = {},
+                weatherViewModel = mockViewModel,
+                onSizeCalculated = { size -> containerSize = size },
+                containerSize = containerSize,
+                stationData = mockStations,
+                onChangeLocationClick = {},
+                onSelectStationsClick = {}
+            )
+        }
+    }
+}

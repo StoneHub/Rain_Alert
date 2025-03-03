@@ -14,8 +14,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import android.util.Log
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.stoneCode.rain_alert.data.AppConfig
 import com.stoneCode.rain_alert.data.UserPreferences
 import com.stoneCode.rain_alert.firebase.FirebaseLogger
@@ -96,7 +98,7 @@ fun SettingsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBackPressed) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back"
                         )
                     }
@@ -121,7 +123,14 @@ fun SettingsScreen(
             Text("Freeze Warning Threshold: ${freezeThreshold.toInt()}°F")
             Slider(
                 value = freezeThreshold.toFloat(),
-                onValueChange = { freezeThreshold = it.toDouble() },
+                onValueChange = { newValue -> 
+                    freezeThreshold = newValue.toDouble()
+                    // Auto-save when value changes
+                    coroutineScope.launch {
+                        userPreferences.updateFreezeThreshold(freezeThreshold)
+                        Log.d("SettingsScreen", "Auto-saved freezeThreshold=$freezeThreshold")
+                    }
+                },
                 valueRange = 25f..45f,
                 steps = 20,
                 modifier = Modifier.fillMaxWidth()
@@ -131,7 +140,14 @@ fun SettingsScreen(
             Text("Freeze Duration Threshold: $freezeDurationHours hours")
             Slider(
                 value = freezeDurationHours.toFloat(),
-                onValueChange = { freezeDurationHours = it.toInt() },
+                onValueChange = { newValue -> 
+                    freezeDurationHours = newValue.toInt()
+                    // Auto-save when value changes
+                    coroutineScope.launch {
+                        userPreferences.updateFreezeDurationHours(freezeDurationHours)
+                        Log.d("SettingsScreen", "Auto-saved freezeDurationHours=$freezeDurationHours")
+                    }
+                },
                 valueRange = 1f..12f,
                 steps = 11,
                 modifier = Modifier.fillMaxWidth()
@@ -141,13 +157,20 @@ fun SettingsScreen(
             Text("Rain Probability Threshold: $rainProbabilityThreshold%")
             Slider(
                 value = rainProbabilityThreshold.toFloat(),
-                onValueChange = { rainProbabilityThreshold = it.toInt() },
+                onValueChange = { newValue -> 
+                    rainProbabilityThreshold = newValue.toInt()
+                    // Auto-save when value changes
+                    coroutineScope.launch {
+                        userPreferences.updateRainProbabilityThreshold(rainProbabilityThreshold)
+                        Log.d("SettingsScreen", "Auto-saved rainProbabilityThreshold=$rainProbabilityThreshold")
+                    }
+                },
                 valueRange = 10f..90f,
                 steps = 8,
                 modifier = Modifier.fillMaxWidth()
             )
-            
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             
             Text(
                 text = "Notifications",
@@ -163,7 +186,14 @@ fun SettingsScreen(
                 Text("Rain Notifications")
                 Switch(
                     checked = enableRainNotifications,
-                    onCheckedChange = { enableRainNotifications = it }
+                    onCheckedChange = { newValue -> 
+                        enableRainNotifications = newValue
+                        // Auto-save when toggled
+                        coroutineScope.launch {
+                            userPreferences.updateEnableRainNotifications(enableRainNotifications)
+                            Log.d("SettingsScreen", "Auto-saved enableRainNotifications=$enableRainNotifications")
+                        }
+                    }
                 )
             }
             
@@ -176,7 +206,14 @@ fun SettingsScreen(
                 Text("Freeze Warnings")
                 Switch(
                     checked = enableFreezeNotifications,
-                    onCheckedChange = { enableFreezeNotifications = it }
+                    onCheckedChange = { newValue -> 
+                        enableFreezeNotifications = newValue
+                        // Auto-save when toggled
+                        coroutineScope.launch {
+                            userPreferences.updateEnableFreezeNotifications(enableFreezeNotifications)
+                            Log.d("SettingsScreen", "Auto-saved enableFreezeNotifications=$enableFreezeNotifications")
+                        }
+                    }
                 )
             }
             
@@ -189,13 +226,28 @@ fun SettingsScreen(
                 Text("Use Custom Sounds")
                 Switch(
                     checked = customSounds,
-                    onCheckedChange = { customSounds = it }
+                    onCheckedChange = { newValue -> 
+                        customSounds = newValue
+                        // Auto-save when toggled
+                        coroutineScope.launch {
+                            userPreferences.updateUseCustomSounds(customSounds)
+                            Log.d("SettingsScreen", "Auto-saved customSounds=$customSounds")
+                            
+                            // Log to Firebase when a setting changes
+                            firebaseLogger.logSettingsChanged(
+                                freezeThreshold = freezeThreshold,
+                                rainProbabilityThreshold = rainProbabilityThreshold,
+                                enableRainNotifications = enableRainNotifications,
+                                enableFreezeNotifications = enableFreezeNotifications,
+                                useCustomSounds = customSounds,
+                                freezeDurationHours = freezeDurationHours
+                            )
+                        }
+                    }
                 )
             }
-            
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
-            
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             
             // Developer Tools Section
             Text(
@@ -246,52 +298,30 @@ fun SettingsScreen(
                 }
             }
             
-            Divider(modifier = Modifier.padding(vertical = 16.dp))
+            Spacer(modifier = Modifier.height(32.dp))
             
-            // Save button
+            // Done button at the end
             Button(
-                onClick = {
-                    coroutineScope.launch {
-                        // Log before saving
-                        Log.d("SettingsScreen", "Saving preferences: " +
-                            "freezeThreshold=$freezeThreshold, " +
-                            "freezeDurationHours=$freezeDurationHours, " +
-                            "rainProbabilityThreshold=$rainProbabilityThreshold")
-                            
-                        // Save to UserPreferences
-                        userPreferences.updateFreezeThreshold(freezeThreshold)
-                        userPreferences.updateFreezeDurationHours(freezeDurationHours)
-                        userPreferences.updateRainProbabilityThreshold(rainProbabilityThreshold)
-                        userPreferences.updateEnableRainNotifications(enableRainNotifications)
-                        userPreferences.updateEnableFreezeNotifications(enableFreezeNotifications)
-                        userPreferences.updateUseCustomSounds(customSounds)
-                        
-                        // Verify the values were stored correctly by reading them back
-                        val verifyFreezeThreshold = userPreferences.freezeThreshold.first()
-                        val verifyFreezeDuration = userPreferences.freezeDurationHours.first()
-                        val verifyRainThreshold = userPreferences.rainProbabilityThreshold.first()
-                        
-                        Log.d("SettingsScreen", "Verified saved preferences: " +
-                            "freezeThreshold=$verifyFreezeThreshold, " +
-                            "freezeDurationHours=$verifyFreezeDuration, " +
-                            "rainProbabilityThreshold=$verifyRainThreshold")
-                        
-                        // Log to Firebase
-                        firebaseLogger.logSettingsChanged(
-                            freezeThreshold = freezeThreshold,
-                            rainProbabilityThreshold = rainProbabilityThreshold,
-                            enableRainNotifications = enableRainNotifications,
-                            enableFreezeNotifications = enableFreezeNotifications,
-                            useCustomSounds = customSounds,
-                            freezeDurationHours = freezeDurationHours
-                        )
-                    }
-                    onBackPressed()
-                },
+                onClick = onBackPressed,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Save Settings")
+                Text("Done")
             }
+            
+            // Add extra space at the bottom for better scrolling experience
+            Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360, heightDp = 720)
+@Composable
+fun PreviewSettingsScreen() {
+    MaterialTheme {
+        SettingsScreen(
+            onBackPressed = {},
+            onSimulateRainClick = {},
+            onSimulateFreezeClick = {}
+        )
     }
 }

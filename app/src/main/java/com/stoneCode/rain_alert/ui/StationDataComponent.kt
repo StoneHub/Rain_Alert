@@ -9,14 +9,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
@@ -35,9 +35,47 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+
+import com.stoneCode.rain_alert.api.WeatherStation
 import com.stoneCode.rain_alert.data.StationObservation
+
+// Simple adapter for preview purposes only
+object PreviewAdapters {
+    fun createPreviewStation(name: String, distance: Double): WeatherStation {
+        return WeatherStation(
+            id = "PREVIEW_${name.replace(" ", "_")}",
+            name = name,
+            latitude = 0.0,
+            longitude = 0.0,
+            distance = distance,
+            stationUrl = ""
+        )
+    }
+    
+    fun createPreviewObservation(
+        stationName: String,
+        distance: Double,
+        temperature: Double?,
+        windSpeed: Double?,
+        windDirection: String?,
+        precipitationLastHour: Double?,
+        textDescription: String?
+    ): StationObservation {
+        return StationObservation(
+            station = createPreviewStation(stationName, distance),
+            temperature = temperature,
+            windSpeed = windSpeed,
+            windDirection = windDirection,
+            precipitationLastHour = precipitationLastHour,
+            textDescription = textDescription,
+            relativeHumidity = null,
+            rawData = null,
+            timestamp = null
+        )
+    }
+}
 
 @Composable
 fun StationDataComponent(
@@ -48,20 +86,16 @@ fun StationDataComponent(
     if (stations.isEmpty()) {
         return
     }
-    
-    Card(
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .fillMaxHeight()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
             modifier = Modifier
+                .fillMaxSize()
                 .padding(16.dp)
-                .fillMaxHeight()
-                .verticalScroll(rememberScrollState())
         ) {
             // Card title with select stations button
             Row(
@@ -74,7 +108,7 @@ fun StationDataComponent(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
-                
+
                 IconButton(
                     onClick = onSelectStationsClick,
                     modifier = Modifier.size(36.dp)
@@ -87,22 +121,35 @@ fun StationDataComponent(
                     )
                 }
             }
-            
-            Spacer(modifier = Modifier.height(8.dp))
+
+            Spacer(modifier = Modifier.height(4.dp))
             HorizontalDivider()
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // Display stations
-            stations.take(3).forEachIndexed { index, station ->
-                if (index > 0) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 4.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Wrap station list in a scrollable container with fixed height
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f) // Take remaining space
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    // Display stations
+                    stations.take(3).forEachIndexed { index, station ->
+                        if (index > 0) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 4.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                        }
+                        
+                        StationItem(station = station)
+                    }
                 }
-                
-                StationItem(station = station)
             }
         }
     }
@@ -170,7 +217,7 @@ fun StationItem(station: StationObservation) {
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
-                if (station.temperature != null && station.temperature <= 35.0) {
+                if (station.isFreezing(35.0)) {
                     StatusIndicator(
                         icon = Icons.Default.Warning,
                         contentDescription = "Freezing",
@@ -181,7 +228,6 @@ fun StationItem(station: StationObservation) {
                 // Temperature
                 station.temperature?.let { tempF ->
                     val tempText = "${tempF.toInt()}°F"
-                    // Optional: Use a small thermometer icon instead of the word "Temp"
                     Text(
                         text = tempText,
                         style = MaterialTheme.typography.bodySmall
@@ -200,7 +246,6 @@ fun StationItem(station: StationObservation) {
                 // Wind
                 if (station.windSpeed != null && station.windDirection != null) {
                     val windText = "${station.windSpeed.toInt()} mph ${station.windDirection}"
-                    // Optional: Use a wind icon instead of the word "Wind"
                     Text(
                         text = windText,
                         style = MaterialTheme.typography.bodySmall
@@ -231,7 +276,6 @@ fun StationItem(station: StationObservation) {
         }
     }
 }
-
 
 @Composable
 fun StatusIndicator(
@@ -267,9 +311,9 @@ fun WeatherDataChip(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(8.dp),
-        color = if (isHighlighted) 
+        color = if (isHighlighted)
             MaterialTheme.colorScheme.primaryContainer
-        else 
+        else
             MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(
@@ -284,7 +328,7 @@ fun WeatherDataChip(
                 else
                     MaterialTheme.colorScheme.onSurfaceVariant
             )
-            
+
             Text(
                 text = value,
                 style = MaterialTheme.typography.bodyMedium,
@@ -295,5 +339,100 @@ fun WeatherDataChip(
                     MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+// Previews
+
+@Preview(showBackground = true, widthDp = 360)
+@Composable
+fun PreviewStationItem() {
+    MaterialTheme {
+        val dummyObservation = PreviewAdapters.createPreviewObservation(
+            stationName = "Test Station",
+            distance = 2.5,
+            temperature = 42.0,
+            windSpeed = 8.0,
+            windDirection = "NE",
+            precipitationLastHour = 0.1,
+            textDescription = "Partly cloudy"
+        )
+        StationItem(station = dummyObservation)
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360, heightDp = 520)
+@Composable
+fun PreviewStationDataComponent() {
+    MaterialTheme {
+        val stationObservations = listOf(
+            PreviewAdapters.createPreviewObservation(
+                stationName = "Station One",
+                distance = 1.2,
+                temperature = 50.0,
+                windSpeed = 10.0,
+                windDirection = "N",
+                precipitationLastHour = 0.0,
+                textDescription = "Sunny"
+            ),
+            PreviewAdapters.createPreviewObservation(
+                stationName = "Station Two",
+                distance = 3.4,
+                temperature = 32.0,
+                windSpeed = 12.0,
+                windDirection = "NW",
+                precipitationLastHour = 0.5,
+                textDescription = "Overcast"
+            ),
+            PreviewAdapters.createPreviewObservation(
+                stationName = "Station Three",
+                distance = 5.6,
+                temperature = 28.0,
+                windSpeed = 7.0,
+                windDirection = "E",
+                precipitationLastHour = 1.0,
+                textDescription = "Raining"
+            )
+        )
+        StationDataComponent(
+            stations = stationObservations
+        )
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360, heightDp = 520)
+@Composable
+fun PreviewEmptyStationDataComponent() {
+    MaterialTheme {
+        Box(modifier = Modifier.fillMaxSize()) {
+            StationDataComponent(
+                stations = emptyList(),
+                onSelectStationsClick = {}
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun PreviewStatusIndicator() {
+    MaterialTheme {
+        StatusIndicator(
+            icon = Icons.Default.Warning,
+            contentDescription = "Warning",
+            color = Color.Red
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun PreviewWeatherDataChip() {
+    MaterialTheme {
+        WeatherDataChip(
+            label = "Humidity",
+            value = "80%",
+            isHighlighted = true
+        )
     }
 }
