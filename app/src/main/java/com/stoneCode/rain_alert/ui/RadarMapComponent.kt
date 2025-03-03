@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,8 +45,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
@@ -53,20 +56,28 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.rememberCameraPositionState
-import com.google.maps.android.compose.rememberMarkerState
 import com.stoneCode.rain_alert.api.WeatherStation
 import com.stoneCode.rain_alert.repository.RadarMapRepository
 import com.stoneCode.rain_alert.viewmodel.RadarMapViewModel
 
 /**
- * A component that displays a radar map with weather data overlays
+ * A component that displays a radar map with weather data overlays.
+ *
+ * Added modifications:
+ * - Accepts an optional myLocation parameter to center the map on your location.
+ * - Shows a marker for your current location.
+ * - Maintains the camera position by using myLocation (if provided) as the default center.
+ * - Long-click (via a simple onClick, since long click isn't directly supported) on station markers
+ *   will show a dialog with station information.
  */
 @Composable
 fun RadarMapComponent(
     modifier: Modifier = Modifier,
     centerLatLng: LatLng = LatLng(40.0, -98.0), // Default to center of US
+    myLocation: LatLng? = null,
     selectedStations: List<WeatherStation> = emptyList(),
     isLoading: Boolean = false,
     onRefresh: () -> Unit = {},
@@ -76,6 +87,9 @@ fun RadarMapComponent(
     onChangeLocationClick: () -> Unit = {},
     radarMapViewModel: RadarMapViewModel = viewModel()
 ) {
+    // State for showing station info dialog when marker is clicked.
+    var selectedStation by remember { mutableStateOf<WeatherStation?>(null) }
+
     // Start with controls hidden
     var showControls by remember { mutableStateOf(false) }
     var showPrecipitationLayer by remember { mutableStateOf(true) }
@@ -92,17 +106,24 @@ fun RadarMapComponent(
     // Get repository instance for calculations
     val radarMapRepository = remember { RadarMapRepository(radarMapViewModel.getApplication()) }
 
-    // Initialize with auto-fit zoom based on selected stations
+    // Use myLocation as default center if available
+    val initialCenter = myLocation ?: centerLatLng
+
+    // Initialize with auto-fit zoom based on selected stations, if available
     LaunchedEffect(selectedStations) {
         if (selectedStations.isNotEmpty()) {
             val (center, zoom) = radarMapRepository.calculateMapViewForStations(selectedStations)
             radarMapViewModel.updateMapCenter(center)
             radarMapViewModel.updateMapZoom(zoom)
+        } else if (myLocation != null) {
+            radarMapViewModel.updateMapCenter(myLocation)
+            // Optionally set a default zoom for your location
+            radarMapViewModel.updateMapZoom(9f)
         }
     }
 
     // Get map data from view model
-    val mapCenter by radarMapViewModel.mapCenter.observeAsState(centerLatLng)
+    val mapCenter by radarMapViewModel.mapCenter.observeAsState(initialCenter)
     val mapZoom by radarMapViewModel.mapZoom.observeAsState(if (fullScreen) 8f else 6f)
 
     // Create camera position state using view model data
@@ -141,15 +162,28 @@ fun RadarMapComponent(
                 compassEnabled = fullScreen
             )
         ) {
+            // Show "My Location" marker if available
+            if (myLocation != null) {
+                Marker(
+                    state = remember { MarkerState(position = myLocation) },
+                    title = "You are here",
+                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
+                )
+            }
             // Add station markers if layer is enabled
             if (showStationsLayer) {
                 selectedStations.forEach { station ->
                     val position = LatLng(station.latitude, station.longitude)
                     Marker(
-                        state = rememberMarkerState(position = position),
+                        state = remember { MarkerState(position = position) },
                         title = station.name,
                         snippet = "Distance: ${String.format("%.1f", station.distance)} km",
-                        icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
+                        icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE),
+                        onClick = {
+                            // Simulate a long click by showing a dialog with station info
+                            selectedStation = station
+                            true
+                        }
                     )
                 }
             }
@@ -159,7 +193,6 @@ fun RadarMapComponent(
                 val stationPositions = selectedStations.take(3).map {
                     LatLng(it.latitude, it.longitude)
                 }
-
                 Polygon(
                     points = stationPositions,
                     fillColor = Color.Blue.copy(alpha = 0.2f),
@@ -173,7 +206,7 @@ fun RadarMapComponent(
         if (showPrecipitationLayer && precipitationRadarUrl != null) {
             Box(modifier = Modifier.fillMaxSize()) {
                 AsyncImage(
-                    model = coil.request.ImageRequest.Builder(LocalContext.current)
+                    model = ImageRequest.Builder(LocalContext.current)
                         .data(precipitationRadarUrl)
                         .crossfade(true)
                         .build(),
@@ -189,7 +222,7 @@ fun RadarMapComponent(
         if (showWindLayer && windRadarUrl != null) {
             Box(modifier = Modifier.fillMaxSize()) {
                 AsyncImage(
-                    model = coil.request.ImageRequest.Builder(LocalContext.current)
+                    model = ImageRequest.Builder(LocalContext.current)
                         .data(windRadarUrl)
                         .crossfade(true)
                         .build(),
@@ -315,6 +348,36 @@ fun RadarMapComponent(
                 contentDescription = if (showControls) "Hide Controls" else "Show Layer Controls",
                 tint = MaterialTheme.colorScheme.onSurface
             )
+        }
+    }
+
+    // Dialog for displaying station info when marker is clicked
+    if (selectedStation != null) {
+        Dialog(onDismissRequest = { selectedStation = null }) {
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Station: ${selectedStation!!.name}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Distance: ${String.format("%.1f", selectedStation!!.distance)} km",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    // Additional weather info could go here.
+                    Button(onClick = { selectedStation = null }) {
+                        Text("Close")
+                    }
+                }
+            }
         }
     }
 }
@@ -471,7 +534,7 @@ fun PreviewRadarMapComponent() {
         Column {
             RadarMapComponent(
                 selectedStations = previewStations,
-                centerLatLng = LatLng(40.1, -98.0)
+                myLocation = LatLng(40.1, -98.0)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
