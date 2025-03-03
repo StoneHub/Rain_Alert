@@ -6,13 +6,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,8 +22,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WaterDrop
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,7 +35,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-
 import com.stoneCode.rain_alert.api.WeatherStation
 import com.stoneCode.rain_alert.data.StationObservation
 
@@ -53,7 +50,7 @@ object PreviewAdapters {
             stationUrl = ""
         )
     }
-    
+
     fun createPreviewObservation(
         stationName: String,
         distance: Double,
@@ -83,81 +80,65 @@ fun StationDataComponent(
     modifier: Modifier = Modifier,
     onSelectStationsClick: () -> Unit = {}
 ) {
-    if (stations.isEmpty()) {
-        return
-    }
+    if (stations.isEmpty()) return
 
-    Box(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .fillMaxHeight()
+            .wrapContentHeight()
+            .padding(16.dp)
     ) {
+        // Header row with title and button
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Nearby Weather Stations",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(
+                onClick = onSelectStationsClick,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Select Stations",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Just show stations in a Column with NO verticalScroll
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
+                .fillMaxWidth()
+                .wrapContentHeight()
         ) {
-            // Card title with select stations button
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Nearby Weather Stations",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f)
-                )
-
-                IconButton(
-                    onClick = onSelectStationsClick,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Select Stations",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
+            stations.forEachIndexed { index, station ->
+                if (index > 0) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                     )
                 }
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Wrap station list in a scrollable container with fixed height
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f) // Take remaining space
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    // Display stations
-                    stations.take(3).forEachIndexed { index, station ->
-                        if (index > 0) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            HorizontalDivider(
-                                modifier = Modifier.padding(vertical = 4.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            )
-                        }
-                        
-                        StationItem(station = station)
-                    }
-                }
+                StationItem(station = station)
             }
         }
     }
 }
 
+
 @Composable
 fun StationItem(station: StationObservation) {
-    // A card-like container (optional)
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surface,
@@ -171,29 +152,22 @@ fun StationItem(station: StationObservation) {
                 .fillMaxWidth()
                 .padding(8.dp)
         ) {
-            // Station name + distance in a single row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Location icon
                 Icon(
                     imageVector = Icons.Default.LocationOn,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(14.dp)
                 )
-
                 Spacer(modifier = Modifier.width(4.dp))
-
-                // Station name, allowed to wrap
                 Text(
                     text = station.station.name,
                     style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.weight(1f)
                 )
-
-                // Distance
                 Text(
                     text = "(${String.format("%.1f", station.station.distance)} km)",
                     style = MaterialTheme.typography.labelSmall,
@@ -203,13 +177,11 @@ fun StationItem(station: StationObservation) {
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Temperature & Wind in one row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // If station is raining or freezing, show icons here
                 if (station.isRaining()) {
                     StatusIndicator(
                         icon = Icons.Default.WaterDrop,
@@ -224,8 +196,6 @@ fun StationItem(station: StationObservation) {
                         color = MaterialTheme.colorScheme.error
                     )
                 }
-
-                // Temperature
                 station.temperature?.let { tempF ->
                     val tempText = "${tempF.toInt()}°F"
                     Text(
@@ -233,8 +203,6 @@ fun StationItem(station: StationObservation) {
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
-
-                // Separator (optional) to visually separate Temp & Wind
                 if (station.temperature != null && station.windSpeed != null) {
                     Text(
                         text = "•",
@@ -242,8 +210,6 @@ fun StationItem(station: StationObservation) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-
-                // Wind
                 if (station.windSpeed != null && station.windDirection != null) {
                     val windText = "${station.windSpeed.toInt()} mph ${station.windDirection}"
                     Text(
@@ -251,8 +217,6 @@ fun StationItem(station: StationObservation) {
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
-
-                // Precip
                 station.precipitationLastHour?.let { precip ->
                     if (precip > 0) {
                         Spacer(modifier = Modifier.width(4.dp))
@@ -264,8 +228,6 @@ fun StationItem(station: StationObservation) {
                     }
                 }
             }
-
-            // Weather description if available
             station.textDescription?.takeIf { it.isNotEmpty() }?.let { desc ->
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -328,7 +290,6 @@ fun WeatherDataChip(
                 else
                     MaterialTheme.colorScheme.onSurfaceVariant
             )
-
             Text(
                 text = value,
                 style = MaterialTheme.typography.bodyMedium,

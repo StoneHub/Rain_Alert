@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -70,7 +71,7 @@ fun WeatherCarousel(
             state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(350.dp) // Fixed height for the pager to fit station content
+                .wrapContentHeight() // Let the pager wrap its content
         ) { page ->
             when (page) {
                 0 -> {
@@ -78,14 +79,15 @@ fun WeatherCarousel(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .fillMaxHeight()
+                            .wrapContentHeight()
                             .padding(horizontal = 16.dp),
                         shape = RoundedCornerShape(12.dp),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         Box(modifier = Modifier
                             .fillMaxWidth()
-                            .fillMaxHeight(), contentAlignment = Alignment.Center) {
+                            .wrapContentHeight(),
+                            contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(
                                     imageVector = Icons.Default.Map,
@@ -116,7 +118,7 @@ fun WeatherCarousel(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .fillMaxHeight()
+                            .wrapContentHeight() // Let the card wrap its content
                             .padding(horizontal = 16.dp),
                         shape = RoundedCornerShape(12.dp),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -219,7 +221,7 @@ private fun PreviewWeatherCarousel() {
     )
     
     val mockViewModel = viewModel<WeatherViewModel>()
-    var containerSize by remember { mutableStateOf(350.dp) }
+    var containerSize by remember { mutableStateOf(400.dp) }
     
     MaterialTheme {
         Surface {
