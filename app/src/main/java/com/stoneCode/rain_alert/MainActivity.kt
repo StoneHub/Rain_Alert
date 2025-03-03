@@ -140,20 +140,6 @@ class MainActivity : ComponentActivity() {
                         stopIntent.action = "STOP_SERVICE"
                         stopService(stopIntent)
                     },
-                    onSimulateRainClick = {
-                        Log.d("MainActivity", "Simulate Rain button clicked")
-                        simulateRain()
-                    },
-                    onSimulateFreezeClick = {
-                        Log.d("MainActivity", "Simulating Freeze Warning")
-                        val simulateFreezeIntent = Intent(this@MainActivity, RainService::class.java)
-                        simulateFreezeIntent.action = "SIMULATE_FREEZE"
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            startForegroundService(simulateFreezeIntent)
-                        } else {
-                            startService(simulateFreezeIntent)
-                        }
-                    },
                     onOpenWeatherWebsiteClick = {
                         Log.d("MainActivity", "Open Weather Website button clicked")
                         openWeatherWebsite()

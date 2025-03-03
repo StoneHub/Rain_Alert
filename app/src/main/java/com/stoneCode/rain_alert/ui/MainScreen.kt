@@ -1,6 +1,7 @@
 package com.stoneCode.rain_alert.ui
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,36 +11,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.saveable.rememberSaveable
-import com.stoneCode.rain_alert.api.WeatherStation
-import com.stoneCode.rain_alert.ui.dialogs.LocationDialog
-import com.stoneCode.rain_alert.ui.dialogs.StationSelectDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -47,9 +35,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +48,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.StoneCode.rain_alert.R
+import com.stoneCode.rain_alert.ui.dialogs.LocationDialog
+import com.stoneCode.rain_alert.ui.dialogs.StationSelectDialog
 import com.stoneCode.rain_alert.viewmodel.WeatherViewModel
 import kotlinx.coroutines.delay
 
@@ -65,8 +57,6 @@ import kotlinx.coroutines.delay
 fun MainScreen(
     onStartServiceClick: () -> Unit,
     onStopServiceClick: () -> Unit,
-    onSimulateFreezeClick: () -> Unit,
-    onSimulateRainClick: () -> Unit,
     onOpenWeatherWebsiteClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onViewHistoryClick: () -> Unit,
@@ -134,14 +124,14 @@ fun MainScreen(
                         Icon(
                             imageVector = Icons.Default.History,
                             contentDescription = "View Alert History",
-                            tint = MaterialTheme.colorScheme.onPrimary
+                            tint = if (isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.onPrimary
                         )
                     }
                     IconButton(onClick = onSettingsClick) {
                         Icon(
                             imageVector = Icons.Default.Settings,
                             contentDescription = "Settings",
-                            tint = MaterialTheme.colorScheme.onPrimary
+                            tint = if (isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.onPrimary
                         )
                     }
                 }
@@ -149,9 +139,15 @@ fun MainScreen(
         },
         content = { innerPadding ->
             Box(modifier = Modifier.fillMaxSize()) {
-                // Background Image
+                // Background Image - Choose based on dark mode
+                val backgroundResId = if (isSystemInDarkTheme()) {
+                    R.drawable.background_nature_dark
+                } else {
+                    R.drawable.background_nature
+                }
+                
                 Image(
-                    painter = painterResource(id = R.drawable.background_nature),
+                    painter = painterResource(id = backgroundResId),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop

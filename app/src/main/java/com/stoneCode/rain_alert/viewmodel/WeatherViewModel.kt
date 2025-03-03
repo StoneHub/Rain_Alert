@@ -17,7 +17,6 @@ import com.stoneCode.rain_alert.repository.AlertHistoryRepository
 import com.stoneCode.rain_alert.repository.WeatherRepository
 import com.stoneCode.rain_alert.service.RainService
 import com.stoneCode.rain_alert.service.ServiceStatusListener
-import com.stoneCode.rain_alert.ui.ApiStatus
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
