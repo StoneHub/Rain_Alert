@@ -33,6 +33,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.stoneCode.rain_alert.api.WeatherStation
+import com.stoneCode.rain_alert.ui.dialogs.LocationDialog
+import com.stoneCode.rain_alert.ui.dialogs.StationSelectDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -160,8 +167,14 @@ fun MainScreen(
                 ) {
                     Spacer(modifier = Modifier.height(8.dp))
                     
-                    // Weather Banner Section - Quick summary of current conditions
-                    WeatherBanner(
+                    // Weather Carousel - Includes Weather, Radar, and Station data
+                    var showLocationDialog by rememberSaveable { mutableStateOf(false) }
+                    var showStationSelectDialog by rememberSaveable { mutableStateOf(false) }
+                    val availableStations by weatherViewModel.availableStations.observeAsState(emptyList())
+                    val selectedStationIds by weatherViewModel.selectedStationIds.observeAsState(emptyList())
+                    
+                    // Weather Carousel
+                    WeatherCarousel(
                         weatherData = weatherData,
                         lastUpdateTime = lastUpdateTime,
                         isRefreshing = isRefreshing,
@@ -177,31 +190,38 @@ fun MainScreen(
                                 initialContainerSize = size
                             }
                         },
-                        containerSize = initialContainerSize
+                        containerSize = initialContainerSize,
+                        stationData = stationData,
+                        onChangeLocationClick = { showLocationDialog = true },
+                        onSelectStationsClick = { showStationSelectDialog = true }
                     )
                     
-                    // Weather Radar Map Placeholder
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .padding(horizontal = 16.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = Icons.Default.Map,
-                                    contentDescription = "Weather Radar Map",
-                                    modifier = Modifier.size(48.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text("Weather Radar Map", style = MaterialTheme.typography.bodyLarge)
-                                Text("Coming Soon", style = MaterialTheme.typography.bodyMedium)
+                    // Location Dialog
+                    if (showLocationDialog) {
+                        LocationDialog(
+                            onDismiss = { showLocationDialog = false },
+                            onConfirm = { zipCode ->
+                                weatherViewModel.updateCustomLocation(zipCode, true)
+                                showLocationDialog = false
+                            },
+                            onUseDeviceLocation = {
+                                weatherViewModel.updateCustomLocation(null, false)
+                                showLocationDialog = false
                             }
-                        }
+                        )
+                    }
+                    
+                    // Station Select Dialog
+                    if (showStationSelectDialog) {
+                        StationSelectDialog(
+                            stations = availableStations,
+                            selectedStationIds = selectedStationIds,
+                            onDismiss = { showStationSelectDialog = false },
+                            onConfirm = { stationIds ->
+                                weatherViewModel.updateSelectedStations(stationIds)
+                                showStationSelectDialog = false
+                            }
+                        )
                     }
 
                     // Control Buttons Section - Simplified for service control only
@@ -254,10 +274,7 @@ fun MainScreen(
                         )
                     }
                     
-                    // Station Data Component
-                    if (stationData.isNotEmpty()) {
-                        StationDataComponent(stations = stationData)
-                    }
+                    // Station Data Component is now part of the carousel
                     
                     // Add space at the bottom for better scrolling
                     Spacer(modifier = Modifier.height(80.dp))

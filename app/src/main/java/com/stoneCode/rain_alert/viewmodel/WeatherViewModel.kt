@@ -1,13 +1,16 @@
-// file: C:/Users/monro/AndroidStudioProjects/Rain_Alert/app/src/main/java/com/stoneCode/rain_alert/viewmodel/WeatherViewModel.kt
 package com.stoneCode.rain_alert.viewmodel
 
 import android.app.Application
+import android.location.Geocoder
+import android.location.Location
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
+import com.stoneCode.rain_alert.api.WeatherStation
 import com.stoneCode.rain_alert.data.StationObservation
+import com.stoneCode.rain_alert.data.UserPreferences
 import com.stoneCode.rain_alert.firebase.FirebaseLogger
 import com.stoneCode.rain_alert.repository.AlertHistoryRepository
 import com.stoneCode.rain_alert.repository.WeatherRepository
@@ -17,6 +20,7 @@ import com.stoneCode.rain_alert.ui.ApiStatus
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -31,6 +35,15 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     private val weatherRepository = WeatherRepository(application.applicationContext)
     private val alertHistoryRepository = AlertHistoryRepository(application.applicationContext)
     private val firebaseLogger = FirebaseLogger.getInstance()
+    
+    // User preferences
+    private val userPreferences = UserPreferences(application.applicationContext)
+    
+    // Custom location and selected stations
+    val customLocationZip = MutableLiveData<String?>(null)
+    val useCustomLocation = MutableLiveData(false)
+    val selectedStationIds = MutableLiveData<List<String>>(emptyList())
+    val availableStations = MutableLiveData<List<WeatherStation>>(emptyList())
 
     // Station data for display
     val stationData = MutableLiveData<List<StationObservation>>(emptyList())
@@ -57,6 +70,15 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
 
     // Data loading status
     val isDataReady = MutableLiveData(false)
+    
+    init {
+        // Load user preferences
+        viewModelScope.launch {
+            customLocationZip.value = userPreferences.customLocationZip.first()
+            useCustomLocation.value = userPreferences.useCustomLocation.first()
+            selectedStationIds.value = userPreferences.selectedStationIds.first().toList()
+        }
+    }
 
     private fun setIsDataReady(ready: Boolean) {
         isDataReady.postValue(ready)
@@ -192,5 +214,56 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             alertHistoryRepository.clearHistory()
         }
+    }
+    
+    /**
+     * Update custom location settings
+     */
+    fun updateCustomLocation(zipCode: String?, useCustomLocation: Boolean) {
+        viewModelScope.launch {
+            customLocationZip.value = zipCode
+            this@WeatherViewModel.useCustomLocation.value = useCustomLocation
+            
+            userPreferences.updateCustomLocationZip(zipCode)
+            userPreferences.updateUseCustomLocation(useCustomLocation)
+            
+            // Refresh weather data with new location
+            refreshWeatherData()
+        }
+    }
+    
+    /**
+     * Update selected station IDs
+     */
+    fun updateSelectedStations(stationIds: List<String>) {
+        viewModelScope.launch {
+            selectedStationIds.value = stationIds
+            userPreferences.updateSelectedStationIds(stationIds.toSet())
+            
+            // Refresh weather data with new stations
+            refreshWeatherData()
+        }
+    }
+    
+    /**
+     * Get location from zip code
+     */
+    fun getLocationFromZipCode(zipCode: String): Location? {
+        try {
+            val geocoder = Geocoder(getApplication())
+            val addresses = geocoder.getFromLocationName(zipCode, 1)
+            
+            if (!addresses.isNullOrEmpty()) {
+                val address = addresses[0]
+                val location = Location("ZipCodeProvider")
+                location.latitude = address.latitude
+                location.longitude = address.longitude
+                return location
+            }
+        } catch (e: Exception) {
+            Log.e("WeatherViewModel", "Error getting location from zip code", e)
+        }
+        
+        return null
     }
 }

@@ -4,6 +4,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 
 object AppConfig {
     // Default weather thresholds
@@ -36,4 +38,7 @@ object AppConfig {
     val ENABLE_RAIN_NOTIFICATIONS_KEY = booleanPreferencesKey("enable_rain_notifications")
     val ENABLE_FREEZE_NOTIFICATIONS_KEY = booleanPreferencesKey("enable_freeze_notifications")
     val USE_CUSTOM_SOUNDS_KEY = booleanPreferencesKey("use_custom_sounds")
+    val CUSTOM_LOCATION_ZIP_KEY = stringPreferencesKey("custom_location_zip")
+    val USE_CUSTOM_LOCATION_KEY = booleanPreferencesKey("use_custom_location")
+    val SELECTED_STATION_IDS_KEY = stringSetPreferencesKey("selected_station_ids")
 }

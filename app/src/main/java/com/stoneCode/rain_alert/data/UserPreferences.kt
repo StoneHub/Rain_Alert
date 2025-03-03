@@ -64,6 +64,24 @@ class UserPreferences(private val context: Context) {
         .map { preferences ->
             preferences[AppConfig.USE_CUSTOM_SOUNDS_KEY] ?: true
         }
+        
+    // Get custom location zip code
+    val customLocationZip: Flow<String?> = context.dataStore.data
+        .map { preferences ->
+            preferences[AppConfig.CUSTOM_LOCATION_ZIP_KEY]
+        }
+    
+    // Get if using custom location
+    val useCustomLocation: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[AppConfig.USE_CUSTOM_LOCATION_KEY] ?: false
+        }
+        
+    // Get selected station IDs
+    val selectedStationIds: Flow<Set<String>> = context.dataStore.data
+        .map { preferences ->
+            preferences[AppConfig.SELECTED_STATION_IDS_KEY] ?: emptySet()
+        }
 
     // Update freeze threshold
     suspend fun updateFreezeThreshold(threshold: Double) {
@@ -118,6 +136,31 @@ class UserPreferences(private val context: Context) {
     suspend fun updateUseCustomSounds(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[AppConfig.USE_CUSTOM_SOUNDS_KEY] = enabled
+        }
+    }
+    
+    // Update custom location zip code
+    suspend fun updateCustomLocationZip(zipCode: String?) {
+        context.dataStore.edit { preferences ->
+            if (zipCode != null) {
+                preferences[AppConfig.CUSTOM_LOCATION_ZIP_KEY] = zipCode
+            } else {
+                preferences.remove(AppConfig.CUSTOM_LOCATION_ZIP_KEY)
+            }
+        }
+    }
+    
+    // Update use custom location
+    suspend fun updateUseCustomLocation(useCustomLocation: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[AppConfig.USE_CUSTOM_LOCATION_KEY] = useCustomLocation
+        }
+    }
+    
+    // Update selected station IDs
+    suspend fun updateSelectedStationIds(stationIds: Set<String>) {
+        context.dataStore.edit { preferences ->
+            preferences[AppConfig.SELECTED_STATION_IDS_KEY] = stationIds
         }
     }
 }

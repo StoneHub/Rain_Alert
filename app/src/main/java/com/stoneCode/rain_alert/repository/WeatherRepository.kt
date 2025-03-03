@@ -3,6 +3,7 @@ package com.stoneCode.rain_alert.repository
 import android.content.Context
 import android.location.Location
 import android.location.LocationManager
+import android.location.Geocoder
 import android.util.Log
 import android.Manifest
 import android.content.pm.PackageManager
@@ -36,9 +37,55 @@ class WeatherRepository(private val context: Context) {
     // Store multi-station data
     private var currentStations: List<StationObservation> = emptyList()
     private var stationsLastUpdated: Long = 0
+    
+    /**
+     * Filter stations based on user preferences
+     */
+    suspend fun filterStationsByPreference(stations: List<StationObservation>): List<StationObservation> {
+        val selectedIds = userPreferences.selectedStationIds.first()
+        
+        return if (selectedIds.isNotEmpty()) {
+            // Use only selected stations if available
+            stations.filter { selectedIds.contains(it.station.id) }
+                .sortedBy { selectedIds.indexOf(it.station.id) }
+        } else {
+            // Otherwise return all stations
+            stations
+        }
+    }
+    
+    /**
+     * Gets the last known location or uses custom location if enabled
+     */
+    suspend fun getCurrentLocation(): Location? {
+        val useCustomLocation = userPreferences.useCustomLocation.first()
+        val customZip = userPreferences.customLocationZip.first()
+        
+        if (useCustomLocation && !customZip.isNullOrEmpty()) {
+            // Use custom location from ZIP code
+            try {
+                val geocoder = Geocoder(context)
+                val addresses = geocoder.getFromLocationName(customZip, 1)
+                
+                if (!addresses.isNullOrEmpty()) {
+                    val address = addresses[0]
+                    val location = Location("ZipCodeProvider")
+                    location.latitude = address.latitude
+                    location.longitude = address.longitude
+                    Log.d(TAG, "Using custom location from ZIP: $customZip")
+                    return location
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error getting location from ZIP code", e)
+            }
+        }
+        
+        // Fall back to device location
+        return getLastKnownLocation()
+    }
 
     suspend fun checkForRain(): Boolean {
-        val lastKnownLocation = getLastKnownLocation() ?: return false
+        val lastKnownLocation = getCurrentLocation() ?: return false
         val latitude = lastKnownLocation.latitude
         val longitude = lastKnownLocation.longitude
 
@@ -76,7 +123,7 @@ class WeatherRepository(private val context: Context) {
             return isFreezing // Return cached value if checked within the last 4 hours
         }
 
-        val lastKnownLocation = getLastKnownLocation() ?: return false
+        val lastKnownLocation = getCurrentLocation() ?: return false
         val latitude = lastKnownLocation.latitude
         val longitude = lastKnownLocation.longitude
         
@@ -194,7 +241,7 @@ class WeatherRepository(private val context: Context) {
     }
 
     suspend fun getCurrentWeather(): String {
-        val lastKnownLocation = getLastKnownLocation() ?: return "Location unavailable"
+        val lastKnownLocation = getCurrentLocation() ?: return "Location unavailable"
         val latitude = lastKnownLocation.latitude
         val longitude = lastKnownLocation.longitude
 
