@@ -76,9 +76,16 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     init {
         // Load user preferences
         viewModelScope.launch {
+            // Load location preferences
             customLocationZip.value = userPreferences.customLocationZip.first()
             useCustomLocation.value = userPreferences.useCustomLocation.first()
-            selectedStationIds.value = userPreferences.selectedStationIds.first().toList()
+            
+            // Load selected stations
+            val savedStationIds = userPreferences.selectedStationIds.first().toList()
+            selectedStationIds.value = savedStationIds
+            
+            // Make initial weather update after loading preferences
+            updateWeatherStatus()
         }
     }
 
@@ -241,10 +248,17 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
      */
     fun updateSelectedStations(stationIds: List<String>) {
         viewModelScope.launch {
+            // Update the internal value
             selectedStationIds.value = stationIds
+            
+            // Save to preferences
             userPreferences.updateSelectedStationIds(stationIds.toSet())
             
-            // Refresh weather data with new stations
+            // Force reload station data from weather repository
+            val updatedStations = weatherRepository.refreshStationData(stationIds)
+            stationData.postValue(updatedStations)
+            
+            // Refresh all weather data
             refreshWeatherData()
         }
     }

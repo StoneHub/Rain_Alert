@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import android.util.Log
 import com.stoneCode.rain_alert.data.AppConfig
 import com.stoneCode.rain_alert.data.UserPreferences
 import com.stoneCode.rain_alert.firebase.FirebaseLogger
@@ -33,7 +34,7 @@ fun SettingsScreen(
     val userPreferences = remember { UserPreferences(context) }
     val firebaseLogger = remember { FirebaseLogger.getInstance() }
     
-    // State for settings
+    // State for settings (initialized with defaults, will be updated with actual values)
     var freezeThreshold by remember { mutableStateOf(AppConfig.FREEZE_THRESHOLD_F) }
     var freezeDurationHours by remember { mutableStateOf(AppConfig.FREEZE_DURATION_HOURS) }
     var rainProbabilityThreshold by remember { mutableStateOf(AppConfig.RAIN_PROBABILITY_THRESHOLD) }
@@ -41,14 +42,51 @@ fun SettingsScreen(
     var enableFreezeNotifications by remember { mutableStateOf(true) }
     var customSounds by remember { mutableStateOf(true) }
     
+    // Flag to track if settings are loaded from preferences
+    var settingsLoaded by remember { mutableStateOf(false) }
+    
     // Load current preferences
     LaunchedEffect(Unit) {
-        freezeThreshold = userPreferences.freezeThreshold.first()
-        freezeDurationHours = userPreferences.freezeDurationHours.first()
-        rainProbabilityThreshold = userPreferences.rainProbabilityThreshold.first()
-        enableRainNotifications = userPreferences.enableRainNotifications.first()
-        enableFreezeNotifications = userPreferences.enableFreezeNotifications.first()
-        customSounds = userPreferences.useCustomSounds.first()
+        try {
+            // Load each preference individually with proper error handling
+            userPreferences.freezeThreshold.first().let {
+                freezeThreshold = it
+            }
+            
+            userPreferences.freezeDurationHours.first().let {
+                freezeDurationHours = it
+            }
+            
+            userPreferences.rainProbabilityThreshold.first().let {
+                rainProbabilityThreshold = it
+            }
+            
+            userPreferences.enableRainNotifications.first().let {
+                enableRainNotifications = it
+            }
+            
+            userPreferences.enableFreezeNotifications.first().let {
+                enableFreezeNotifications = it
+            }
+            
+            userPreferences.useCustomSounds.first().let {
+                customSounds = it
+            }
+            
+            // Mark settings as loaded to avoid overwriting with defaults
+            settingsLoaded = true
+            
+            // Log that settings were loaded successfully
+            Log.d("SettingsScreen", "Loaded preferences: " +
+                "freezeThreshold=$freezeThreshold, " +
+                "freezeDurationHours=$freezeDurationHours, " +
+                "rainProbabilityThreshold=$rainProbabilityThreshold, " +
+                "enableRainNotifications=$enableRainNotifications, " +
+                "enableFreezeNotifications=$enableFreezeNotifications, " +
+                "customSounds=$customSounds")
+        } catch (e: Exception) {
+            Log.e("SettingsScreen", "Error loading preferences", e)
+        }
     }
 
     Scaffold(
@@ -214,6 +252,12 @@ fun SettingsScreen(
             Button(
                 onClick = {
                     coroutineScope.launch {
+                        // Log before saving
+                        Log.d("SettingsScreen", "Saving preferences: " +
+                            "freezeThreshold=$freezeThreshold, " +
+                            "freezeDurationHours=$freezeDurationHours, " +
+                            "rainProbabilityThreshold=$rainProbabilityThreshold")
+                            
                         // Save to UserPreferences
                         userPreferences.updateFreezeThreshold(freezeThreshold)
                         userPreferences.updateFreezeDurationHours(freezeDurationHours)
@@ -221,6 +265,16 @@ fun SettingsScreen(
                         userPreferences.updateEnableRainNotifications(enableRainNotifications)
                         userPreferences.updateEnableFreezeNotifications(enableFreezeNotifications)
                         userPreferences.updateUseCustomSounds(customSounds)
+                        
+                        // Verify the values were stored correctly by reading them back
+                        val verifyFreezeThreshold = userPreferences.freezeThreshold.first()
+                        val verifyFreezeDuration = userPreferences.freezeDurationHours.first()
+                        val verifyRainThreshold = userPreferences.rainProbabilityThreshold.first()
+                        
+                        Log.d("SettingsScreen", "Verified saved preferences: " +
+                            "freezeThreshold=$verifyFreezeThreshold, " +
+                            "freezeDurationHours=$verifyFreezeDuration, " +
+                            "rainProbabilityThreshold=$verifyRainThreshold")
                         
                         // Log to Firebase
                         firebaseLogger.logSettingsChanged(

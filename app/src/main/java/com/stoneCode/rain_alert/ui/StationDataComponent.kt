@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.stoneCode.rain_alert.data.StationObservation
 
@@ -109,111 +110,128 @@ fun StationDataComponent(
 
 @Composable
 fun StationItem(station: StationObservation) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
+    // A card-like container (optional)
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp, horizontal = 8.dp)
     ) {
-        // Station header with name and distance
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.LocationOn,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(16.dp)
-            )
-            
-            Spacer(modifier = Modifier.width(4.dp))
-            
-            Text(
-                text = station.station.name,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
-            
-            Spacer(modifier = Modifier.width(8.dp))
-            
-            Text(
-                text = "(${String.format("%.1f", station.station.distance)} km)",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            // Status indicators
-            Spacer(modifier = Modifier.weight(1f))
-            
-            // Rain indicator
-            if (station.isRaining()) {
-                StatusIndicator(
-                    icon = Icons.Default.WaterDrop,
-                    contentDescription = "Raining",
-                    color = MaterialTheme.colorScheme.primary
+            // Station name + distance in a single row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Location icon
+                Icon(
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(14.dp)
                 )
-            }
-            
-            // Freeze indicator
-            if (station.temperature != null && station.temperature <= 35.0) {
+
                 Spacer(modifier = Modifier.width(4.dp))
-                StatusIndicator(
-                    icon = Icons.Default.Warning,
-                    contentDescription = "Freezing",
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(4.dp))
-        
-        // Station details
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Temperature
-            station.temperature?.let {
-                WeatherDataChip(
-                    label = "Temp",
-                    value = "${it.toInt()}°F",
+
+                // Station name, allowed to wrap
+                Text(
+                    text = station.station.name,
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.weight(1f)
                 )
-            }
-            
-            // Wind
-            if (station.windSpeed != null && station.windDirection != null) {
-                WeatherDataChip(
-                    label = "Wind",
-                    value = "${station.windSpeed.toInt()} mph ${station.windDirection}",
-                    modifier = Modifier.weight(1.5f)
+
+                // Distance
+                Text(
+                    text = "(${String.format("%.1f", station.station.distance)} km)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            
-            // Precipitation
-            station.precipitationLastHour?.let {
-                if (it > 0) {
-                    WeatherDataChip(
-                        label = "Precip",
-                        value = "${String.format("%.2f", it)} in",
-                        modifier = Modifier.weight(1f),
-                        isHighlighted = true
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Temperature & Wind in one row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // If station is raining or freezing, show icons here
+                if (station.isRaining()) {
+                    StatusIndicator(
+                        icon = Icons.Default.WaterDrop,
+                        contentDescription = "Raining",
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
+                if (station.temperature != null && station.temperature <= 35.0) {
+                    StatusIndicator(
+                        icon = Icons.Default.Warning,
+                        contentDescription = "Freezing",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                // Temperature
+                station.temperature?.let { tempF ->
+                    val tempText = "${tempF.toInt()}°F"
+                    // Optional: Use a small thermometer icon instead of the word "Temp"
+                    Text(
+                        text = tempText,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
+                // Separator (optional) to visually separate Temp & Wind
+                if (station.temperature != null && station.windSpeed != null) {
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Wind
+                if (station.windSpeed != null && station.windDirection != null) {
+                    val windText = "${station.windSpeed.toInt()} mph ${station.windDirection}"
+                    // Optional: Use a wind icon instead of the word "Wind"
+                    Text(
+                        text = windText,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
+                // Precip
+                station.precipitationLastHour?.let { precip ->
+                    if (precip > 0) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "${String.format("%.2f", precip)} in",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
-        }
-        
-        // Weather description if available
-        station.textDescription?.let {
-            if (it.isNotEmpty()) {
+
+            // Weather description if available
+            station.textDescription?.takeIf { it.isNotEmpty() }?.let { desc ->
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 4.dp)
+                    text = desc,
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
         }
     }
 }
+
 
 @Composable
 fun StatusIndicator(

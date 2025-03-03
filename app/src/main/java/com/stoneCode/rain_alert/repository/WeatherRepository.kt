@@ -366,6 +366,43 @@ class WeatherRepository(private val context: Context) {
     }
     
     /**
+     * Refreshes station data specifically for the given station IDs
+     */
+    suspend fun refreshStationData(stationIds: List<String>): List<StationObservation> {
+        val location = getCurrentLocation() ?: return emptyList()
+        
+        try {
+            // First get all nearby stations
+            val result = multiStationWeatherService.getNearbyStationsObservations(
+                latitude = location.latitude,
+                longitude = location.longitude
+            )
+            
+            if (result.isSuccess) {
+                val allStations = result.getOrNull() ?: emptyList()
+                
+                // Filter to only include selected stations
+                val filteredStations = if (stationIds.isNotEmpty()) {
+                    allStations.filter { stationIds.contains(it.station.id) }
+                        .sortedBy { stationIds.indexOf(it.station.id) }
+                } else {
+                    allStations
+                }
+                
+                // Update the cached stations
+                currentStations = filteredStations
+                stationsLastUpdated = System.currentTimeMillis()
+                
+                return filteredStations
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error refreshing station data", e)
+        }
+        
+        return emptyList()
+    }
+    
+    /**
      * Gets current station observations, refreshing if necessary
      */
     private suspend fun getUpdatedStationObservations(latitude: Double, longitude: Double): Result<List<StationObservation>> {
