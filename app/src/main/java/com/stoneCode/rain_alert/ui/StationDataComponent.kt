@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -23,6 +24,8 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,9 +33,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -81,9 +94,10 @@ fun StationDataComponent(
     stations: List<StationObservation>,
     modifier: Modifier = Modifier,
     onSelectStationsClick: () -> Unit = {},
-    onStationLongClick: (String) -> Unit = {}
+    onStationLongClick: (String) -> Unit = {},
+    isLoading: Boolean = false
 ) {
-    if (stations.isEmpty()) return
+    if (stations.isEmpty() && !isLoading) return
 
     Column(
         modifier = modifier
@@ -112,6 +126,7 @@ fun StationDataComponent(
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
+                }
             }
         }
 
@@ -119,13 +134,17 @@ fun StationDataComponent(
         HorizontalDivider()
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Just show stations in a Column with NO verticalScroll
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .wrapContentHeight()
-        ) {
-            stations.forEachIndexed { index, station ->
+        // Show loading indicator or stations
+        if (isLoading) {
+            LoadingIndicator()
+        } else {
+            // Just show stations in a Column with NO verticalScroll
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight()
+            ) {
+                stations.forEachIndexed { index, station ->
                 if (index > 0) {
                     Spacer(modifier = Modifier.height(6.dp))
                     HorizontalDivider(
@@ -377,6 +396,52 @@ fun PreviewStationDataComponent() {
     }
 }
 
+@Composable
+fun LoadingIndicator() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+            .wrapContentHeight(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(16.dp)
+        ) {
+            val infiniteTransition = rememberInfiniteTransition(label = "refresh_rotation")
+            val rotation by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 360f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(2000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "refresh_rotation"
+            )
+            
+            Icon(
+                imageVector = Icons.Default.Refresh,
+                contentDescription = "Loading",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .size(36.dp)
+                    .padding(4.dp)
+                    .graphicsLayer { rotationZ = rotation }
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = "Loading weather data...",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
 @Preview(showBackground = true, widthDp = 360, heightDp = 520)
 @Composable
 fun PreviewEmptyStationDataComponent() {
@@ -385,6 +450,20 @@ fun PreviewEmptyStationDataComponent() {
             StationDataComponent(
                 stations = emptyList(),
                 onSelectStationsClick = {}
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360, heightDp = 520)
+@Composable
+fun PreviewLoadingStationDataComponent() {
+    MaterialTheme {
+        Box(modifier = Modifier.fillMaxSize()) {
+            StationDataComponent(
+                stations = emptyList(),
+                onSelectStationsClick = {},
+                isLoading = true
             )
         }
     }

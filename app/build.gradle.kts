@@ -76,6 +76,10 @@ dependencies {
 // Location services
     implementation(libs.play.services.location)
     
+// Maps
+    implementation("com.google.maps.android:maps-compose:2.15.0")
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+    
 // Firebase    
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)

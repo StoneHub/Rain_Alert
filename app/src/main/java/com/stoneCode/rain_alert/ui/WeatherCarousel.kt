@@ -40,9 +40,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.android.gms.maps.model.LatLng
 import com.stoneCode.rain_alert.data.StationObservation
+import com.stoneCode.rain_alert.viewmodel.RadarMapViewModel
 import com.stoneCode.rain_alert.viewmodel.WeatherViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun WeatherCarousel(
@@ -57,15 +61,25 @@ fun WeatherCarousel(
     stationData: List<StationObservation>,
     onChangeLocationClick: () -> Unit,
     onSelectStationsClick: () -> Unit,
-    onStationLongClick: (String) -> Unit = {}
+    onStationLongClick: (String) -> Unit = {},
+    radarMapViewModel: RadarMapViewModel = viewModel()
 ) {
     val pagerState = rememberPagerState(pageCount = { 2 })
-    rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
     
-    Column(modifier = Modifier.fillMaxWidth(),
+    // State for full screen radar map dialog
+    var showFullScreenRadar by remember { mutableStateOf(false) }
+    
+    // Update the radar map view model with station data when available
+    if (stationData.isNotEmpty()) {
+        val stations = stationData.map { it.station }
+        radarMapViewModel.updateSelectedStations(stations)
+    }
+    
+    Column(
+        modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-
         // Calculate height of the station data - adjust constants to reduce extra space
         val stationDataHeight = if (stationData.isNotEmpty()) {
             // Approximation: 135dp per station + 32dp for header = tighter fit
@@ -92,31 +106,31 @@ fun WeatherCarousel(
                         shape = RoundedCornerShape(12.dp),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
-                        Box(modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(),
-                            contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = Icons.Default.Map,
-                                    contentDescription = "Weather Radar Map",
-                                    modifier = Modifier.size(48.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text("Weather Radar Map", style = MaterialTheme.typography.bodyLarge)
-                                Text("Coming Soon", style = MaterialTheme.typography.bodyMedium)
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                IconButton(onClick = onChangeLocationClick) {
-                                    Icon(
-                                        imageVector = Icons.Default.LocationSearching,
-                                        contentDescription = "Change Location",
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
+                        // Use RadarMapComponent instead of placeholder
+                        Box(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
+                            // Get center from stations or use default
+                            val center = if (stationData.isNotEmpty()) {
+                                val lat = stationData.map { it.station.latitude }.average()
+                                val lng = stationData.map { it.station.longitude }.average()
+                                LatLng(lat, lng)
+                            } else {
+                                // Default US center
+                                LatLng(40.0, -98.0)
                             }
+                            
+                            // Display RadarMapComponent
+                            RadarMapComponent(
+                                modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+                                centerLatLng = center,
+                                selectedStations = stationData.map { it.station },
+                                isLoading = isRefreshing,
+                                onRefresh = {
+                                    radarMapViewModel.refreshRadarData()
+                                    weatherViewModel.updateWeatherStatus()
+                                },
+                                fullScreen = false,
+                                onToggleFullScreen = { showFullScreenRadar = true }
+                            )
                         }
                     }
                 }
@@ -135,7 +149,8 @@ fun WeatherCarousel(
                             StationDataComponent(
                                 stations = stationData,
                                 onSelectStationsClick = onSelectStationsClick,
-                                onStationLongClick = onStationLongClick
+                                onStationLongClick = onStationLongClick,
+                                isLoading = isRefreshing
                             )
                         } else {
                             Box(modifier = Modifier.fillMaxWidth().fillMaxHeight(), contentAlignment = Alignment.Center) {
@@ -199,6 +214,41 @@ fun WeatherCarousel(
                             else MaterialTheme.colorScheme.surfaceVariant
                         )
                         .size(if (selected) 10.dp else 8.dp)
+                )
+            }
+        }
+    }
+    
+    // Full Screen Radar Map Dialog
+    if (showFullScreenRadar) {
+        Dialog(
+            onDismissRequest = { showFullScreenRadar = false }
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                // Get center from stations or use default
+                val center = if (stationData.isNotEmpty()) {
+                    val lat = stationData.map { it.station.latitude }.average()
+                    val lng = stationData.map { it.station.longitude }.average()
+                    LatLng(lat, lng)
+                } else {
+                    // Default US center
+                    LatLng(40.0, -98.0)
+                }
+                
+                RadarMapComponent(
+                    modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+                    centerLatLng = center,
+                    selectedStations = stationData.map { it.station },
+                    isLoading = isRefreshing,
+                    onRefresh = {
+                        radarMapViewModel.refreshRadarData()
+                        weatherViewModel.updateWeatherStatus()
+                    },
+                    fullScreen = true,
+                    onToggleFullScreen = { showFullScreenRadar = false }
                 )
             }
         }
