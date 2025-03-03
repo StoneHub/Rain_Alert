@@ -64,10 +64,32 @@ class WeatherStationFinder {
                 station.copy(distance = distance)
             }.sortedBy { it.distance }
             
-            // Return the closest stations
-            val closestStations = stationsWithDistance.take(limit)
+            // Try to include specific important stations like GSP
+            val stationsToInclude = mutableListOf<WeatherStation>()
             
-            Log.d(TAG, "Found ${closestStations.size} closest stations to ($latitude,$longitude)")
+            // Look for GSP airport station specifically
+            val gspStation = stationsWithDistance.find { 
+                it.id == "KGSP" || it.name.contains("Greenville-Spartanburg", ignoreCase = true) 
+            }
+            
+            if (gspStation != null) {
+                Log.d(TAG, "Found GSP airport station: ${gspStation.name} (${gspStation.id}), Distance: ${String.format("%.2f", gspStation.distance)} km")
+                stationsToInclude.add(gspStation)
+            } else {
+                Log.d(TAG, "GSP airport station not found in available stations")
+            }
+            
+            // Return the closest stations plus any important stations we want to include
+            val closestStations = stationsWithDistance.take(limit).toMutableList()
+            
+            // Add any specific stations that aren't already in the list
+            stationsToInclude.forEach { station ->
+                if (!closestStations.any { it.id == station.id }) {
+                    closestStations.add(station)
+                }
+            }
+            
+            Log.d(TAG, "Found ${closestStations.size} stations for location ($latitude,$longitude)")
             closestStations.forEachIndexed { index, station ->
                 Log.d(TAG, "Station ${index + 1}: ${station.name} (${station.id}), Distance: ${String.format("%.2f", station.distance)} km")
             }

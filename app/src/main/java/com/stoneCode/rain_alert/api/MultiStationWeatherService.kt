@@ -198,7 +198,7 @@ class MultiStationWeatherService(private val context: Context) {
      * Analyzes multiple station observations to determine if rain is likely
      * @param observations List of station observations
      * @param rainProbabilityThreshold Minimum percentage of stations reporting rain to trigger alert
-     * @return True if rain is likely based on multiple station data
+     * @return True if rain is likely based on multiple station data, weighted by distance
      */
     fun analyzeForRain(
         observations: List<StationObservation>,
@@ -208,23 +208,50 @@ class MultiStationWeatherService(private val context: Context) {
             return false
         }
         
-        // Count stations reporting rain
-        val rainingStations = observations.count { it.isRaining() }
+        // Get stations reporting rain
+        val rainingStations = observations.filter { it.isRaining() }
         
-        // Calculate percentage of stations reporting rain
-        val rainingPercentage = (rainingStations.toDouble() / observations.size) * 100
+        if (rainingStations.isEmpty()) {
+            return false
+        }
         
-        Log.d(TAG, "$rainingStations/${observations.size} stations report rain (${rainingPercentage.toInt()}%)")
+        // Calculate weighted probability based on distance
+        // Closer stations have more influence than distant ones
+        val totalWeight = calculateDistanceWeights(observations)
+        val rainingWeight = calculateDistanceWeights(rainingStations)
         
-        // Return true if percentage exceeds threshold
+        // Calculate weighted percentage
+        val rainingPercentage = (rainingWeight / totalWeight) * 100
+        
+        Log.d(TAG, "${rainingStations.size}/${observations.size} stations report rain, weighted percentage: ${rainingPercentage.toInt()}%")
+        
+        // Log detailed station information for debugging
+        observations.forEach { station ->
+            val isRaining = if (station.isRaining()) "RAIN" else "NO RAIN"
+            val weight = 1.0 / (station.station.distance ?: 1.0)
+            Log.d(TAG, "Station: ${station.station.name}, Distance: ${String.format("%.1f", station.station.distance)} km, Status: $isRaining, Weight: ${String.format("%.4f", weight)}")
+        }
+        
+        // Return true if weighted percentage exceeds threshold
         return rainingPercentage >= rainProbabilityThreshold
+    }
+    
+    /**
+     * Calculate the sum of weights for a list of stations, where weight is inversely proportional to distance
+     */
+    private fun calculateDistanceWeights(stations: List<StationObservation>): Double {
+        return stations.sumOf { station -> 
+            // Default to distance 1.0 if distance is null or zero to avoid division by zero
+            val distance = station.station.distance ?: 1.0
+            1.0 / (if (distance < 1.0) 1.0 else distance)
+        }
     }
     
     /**
      * Analyzes station observations to check for freeze conditions
      * @param observations List of station observations
      * @param freezeThresholdF Temperature threshold for freeze warning in °F
-     * @return True if any station is reporting freezing conditions
+     * @return True if stations are reporting freezing conditions, weighted by distance
      */
     fun analyzeForFreeze(
         observations: List<StationObservation>,
@@ -234,15 +261,31 @@ class MultiStationWeatherService(private val context: Context) {
             return false
         }
         
-        // Count stations reporting freezing conditions
-        val freezingStations = observations.count { it.isFreezing(freezeThresholdF) }
+        // Get stations reporting freezing conditions
+        val freezingStations = observations.filter { it.isFreezing(freezeThresholdF) }
         
-        // Check if majority of stations report freezing
-        val freezingPercentage = (freezingStations.toDouble() / observations.size) * 100
+        if (freezingStations.isEmpty()) {
+            return false
+        }
         
-        Log.d(TAG, "$freezingStations/${observations.size} stations report freezing conditions (${freezingPercentage.toInt()}%)")
+        // Calculate weighted probability based on distance
+        val totalWeight = calculateDistanceWeights(observations)
+        val freezingWeight = calculateDistanceWeights(freezingStations)
         
-        // Consider it freezing if more than half of stations report freezing
+        // Calculate weighted percentage
+        val freezingPercentage = (freezingWeight / totalWeight) * 100
+        
+        Log.d(TAG, "${freezingStations.size}/${observations.size} stations report freezing conditions, weighted percentage: ${freezingPercentage.toInt()}%")
+        
+        // Log detailed station information for debugging
+        observations.forEach { station ->
+            val temp = station.temperature?.let { "${String.format("%.1f", it)}°F" } ?: "N/A"
+            val isFreezing = if (station.isFreezing(freezeThresholdF)) "FREEZING" else "ABOVE FREEZE"
+            val weight = 1.0 / (station.station.distance ?: 1.0)
+            Log.d(TAG, "Station: ${station.station.name}, Distance: ${String.format("%.1f", station.station.distance)} km, Temp: $temp, Status: $isFreezing, Weight: ${String.format("%.4f", weight)}")
+        }
+        
+        // Consider it freezing if weighted percentage is at least 50%
         return freezingPercentage >= 50
     }
 }

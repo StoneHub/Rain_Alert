@@ -258,21 +258,7 @@ fun MainScreen(
                         }
                     }
                     
-                    // API Status Section with refresh button - Removed external header as it's inside the component now
-                    apiStatus?.let { status ->
-                        ApiStatusWidget(
-                            apiStatus = status.copy(
-                                serviceProvider = "National Weather Service",
-                                locationInfo = weatherViewModel.currentLocation.value,
-                                rawApiData = weatherViewModel.rawApiData.value
-                            ),
-                            onRefreshClick = { 
-                                isRefreshing = true
-                                weatherViewModel.refreshWeatherData() 
-                            },
-                            isRefreshing = isRefreshing
-                        )
-                    }
+                    // API Status widget removed as no longer useful
                     
                     // Station Data Component is now part of the carousel
                     
