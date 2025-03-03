@@ -62,13 +62,6 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
         .distinctUntilChanged()
         .asLiveData()
 
-    // API status tracking
-    val apiStatus = MutableLiveData<ApiStatus>(ApiStatus(
-        isConnected = false,
-        lastUpdated = System.currentTimeMillis(),
-        errorMessage = "Not connected yet"
-    ))
-
     // Data loading status
     val isDataReady = MutableLiveData(false)
     
@@ -158,32 +151,12 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                 val rawData = weatherRepository.getRawApiResponse()
                 rawApiData.postValue(rawData!!)
                 
-                // Update API status with success
-                val responseTime = System.currentTimeMillis() - startTime
-                apiStatus.postValue(ApiStatus(
-                    isConnected = true,
-                    lastUpdated = System.currentTimeMillis(),
-                    responseTime = responseTime,
-                    rainProbability = weatherRepository.getPrecipitationChance(),
-                    temperature = weatherRepository.getCurrentTemperature(),
-                    locationInfo = currentLocation.value,
-                    rawApiData = rawData
-                ))
-                
                 // Log API success to Firebase
                 firebaseLogger.logApiStatus(isSuccess = true, endpoint = "getCurrentWeather")
                 
                 setIsDataReady(true) // Set to true when data is fetched
             } catch (e: Exception) {
                 Log.e("WeatherViewModel", "Error fetching weather data", e)
-                
-                // Update API status with error
-                apiStatus.postValue(ApiStatus(
-                    isConnected = false,
-                    lastUpdated = System.currentTimeMillis(),
-                    errorMessage = e.message ?: "Unknown error",
-                    locationInfo = currentLocation.value
-                ))
                 
                 // Log API failure to Firebase
                 firebaseLogger.logApiStatus(

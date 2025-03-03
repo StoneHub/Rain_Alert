@@ -65,7 +65,6 @@ fun MainScreen(
     val isServiceRunning by weatherViewModel.isServiceRunning.observeAsState(false)
     val lastUpdateTime by weatherViewModel.lastUpdateTime.observeAsState("")
     val isDataReady by weatherViewModel.isDataReady.observeAsState(false)
-    val apiStatus by weatherViewModel.apiStatus.observeAsState()
     val stationData by weatherViewModel.stationData.observeAsState(emptyList())
     var weatherData by remember { mutableStateOf("Loading...") }
     var isRefreshing by remember { mutableStateOf(false) }
