@@ -31,8 +31,9 @@ class RadarMapRepository(private val context: Context) {
             // Documentation: https://www.weather.gov/documentation/services-web-api
             // We're using the standard reflectivity product which shows precipitation
             
-            // Update to use the NWS base reflectivity product
-            val radarUrl = "https://radar.weather.gov/ridge/lite/CONUS_BREF_LIT.png"
+            // Update to use the NWS base reflectivity product for the Continental US
+            // This provides a nationwide view of precipitation
+            val radarUrl = "https://radar.weather.gov/ridge/standard/CONUS_BREF_LIT.png"
             
             // Verify the URL works by making a request
             val request = Request.Builder()
@@ -59,8 +60,9 @@ class RadarMapRepository(private val context: Context) {
      */
     suspend fun getWindRadarUrl(center: LatLng): Result<String> = withContext(Dispatchers.IO) {
         try {
-            // Use wind velocity product from NWS
-            val windUrl = "https://radar.weather.gov/ridge/lite/CONUS_VELO_LIT.png"
+            // Use wind velocity product from NWS for the Continental US
+            // This provides a nationwide view of wind patterns
+            val windUrl = "https://radar.weather.gov/ridge/standard/CONUS_VELO_LIT.png"
             
             // Verify the URL works
             val request = Request.Builder()

@@ -53,6 +53,8 @@ android {
 }
 
 dependencies {
+    // Ground Overlay implementation for Google Maps
+    implementation("com.google.maps.android:android-maps-utils:2.3.0")
 
     // Pager for horizontal carousel
     implementation(libs.androidx.foundation)
