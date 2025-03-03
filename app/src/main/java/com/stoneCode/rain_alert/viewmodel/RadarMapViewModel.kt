@@ -102,9 +102,26 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
         _mapCenter.value = center
     }
     
+    /**
+     * Update map zoom level
+     */
+    fun updateMapZoom(zoom: Float) {
+        _mapZoom.value = zoom
+    }
+    
+    /**
+     * Refresh radar data
+     */
     fun refreshRadarData() {
         _mapCenter.value?.let { center ->
             fetchRadarData(center)
         }
     }
+    
+//    /**
+//     * Get the application context
+//     */
+//    fun getApplication(): Application {
+//        return getApplication<Application>()
+//    }
 }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -19,8 +20,10 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.ZoomIn
-import androidx.compose.material.icons.filled.ZoomOut
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,6 +52,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
@@ -66,7 +71,10 @@ import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.TileOverlay
 import com.google.maps.android.compose.rememberTileOverlayState
 import com.stoneCode.rain_alert.api.WeatherStation
+import com.stoneCode.rain_alert.repository.RadarMapRepository
 import com.stoneCode.rain_alert.viewmodel.RadarMapViewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import java.net.URL
 
 /**
@@ -81,9 +89,12 @@ fun RadarMapComponent(
     onRefresh: () -> Unit = {},
     fullScreen: Boolean = false,
     onToggleFullScreen: () -> Unit = {},
+    onMyLocationClick: () -> Unit = {},
+    onChangeLocationClick: () -> Unit = {},
     radarMapViewModel: RadarMapViewModel = viewModel()
 ) {
-    var showControls by remember { mutableStateOf(true) }
+    // Start with controls hidden
+    var showControls by remember { mutableStateOf(false) }
     var showPrecipitationLayer by remember { mutableStateOf(true) }
     var showWindLayer by remember { mutableStateOf(false) }
     var showStationsLayer by remember { mutableStateOf(true) }
@@ -95,46 +106,30 @@ fun RadarMapComponent(
     val isRadarLoading by radarMapViewModel.isLoading.observeAsState(false)
     val errorMessage by radarMapViewModel.errorMessage.observeAsState()
     
-    // Fetch radar data if needed
-    LaunchedEffect(centerLatLng) {
-        radarMapViewModel.updateMapCenter(centerLatLng)
-        radarMapViewModel.fetchRadarData(centerLatLng)
+    // Get repository instance for calculations
+    val radarMapRepository = remember { RadarMapRepository(radarMapViewModel.getApplication()) }
+    
+    // Initialize with auto-fit zoom based on selected stations
+    LaunchedEffect(selectedStations) {
+        if (selectedStations.isNotEmpty()) {
+            val (center, zoom) = radarMapRepository.calculateMapViewForStations(selectedStations)
+            radarMapViewModel.updateMapCenter(center)
+            radarMapViewModel.updateMapZoom(zoom)
+        }
     }
     
-    // Create camera position state
+    // Get map data from view model
+    val mapCenter by radarMapViewModel.mapCenter.observeAsState(centerLatLng)
+    val mapZoom by radarMapViewModel.mapZoom.observeAsState(if (fullScreen) 8f else 6f)
+    
+    // Create camera position state using view model data
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(centerLatLng, if (fullScreen) 8f else 6f)
+        position = CameraPosition.fromLatLngZoom(mapCenter, mapZoom)
     }
     
-    // Create radar tile providers if URLs are available
-    val precipTileProvider = remember(precipitationRadarUrl) {
-        precipitationRadarUrl?.let { url ->
-            object : UrlTileProvider(512, 512) {
-                override fun getTileUrl(x: Int, y: Int, zoom: Int): URL {
-                    // Base URL for precipitation radar tiles
-                    val tileUrl = url.replace(
-                        "BBOX=${centerLatLng.longitude - 2},${centerLatLng.latitude - 2},${centerLatLng.longitude + 2},${centerLatLng.latitude + 2}",
-                        "BBOX=${centerLatLng.longitude - 2},${centerLatLng.latitude - 2},${centerLatLng.longitude + 2},${centerLatLng.latitude + 2}"
-                    )
-                    return URL(tileUrl)
-                }
-            }
-        }
-    }
-    
-    val windTileProvider = remember(windRadarUrl) {
-        windRadarUrl?.let { url ->
-            object : UrlTileProvider(512, 512) {
-                override fun getTileUrl(x: Int, y: Int, zoom: Int): URL {
-                    // Base URL for wind radar tiles
-                    val tileUrl = url.replace(
-                        "BBOX=${centerLatLng.longitude - 2},${centerLatLng.latitude - 2},${centerLatLng.longitude + 2},${centerLatLng.latitude + 2}",
-                        "BBOX=${centerLatLng.longitude - 2},${centerLatLng.latitude - 2},${centerLatLng.longitude + 2},${centerLatLng.latitude + 2}"
-                    )
-                    return URL(tileUrl)
-                }
-            }
-        }
+    // Fetch radar data if needed
+    LaunchedEffect(mapCenter) {
+        radarMapViewModel.fetchRadarData(mapCenter)
     }
     
     Box(
@@ -180,26 +175,36 @@ fun RadarMapComponent(
                     strokeWidth = 2f
                 )
             }
-            
-            // Add precipitation radar overlay if layer is enabled and URL is available
-            if (showPrecipitationLayer && precipTileProvider != null) {
-                TileOverlay(
-                    tileProvider = precipTileProvider,
-                    transparency = 0.3f,
-                    zIndex = 1f,
-                    visible = true,
-                    state = rememberTileOverlayState()
+        }
+        
+        // Add precipitation radar overlay if layer is enabled and URL is available
+        if (showPrecipitationLayer && precipitationRadarUrl != null) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(precipitationRadarUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Precipitation Radar",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    alpha = 0.7f // Make the overlay semi-transparent
                 )
             }
-            
-            // Add wind radar overlay if layer is enabled and URL is available
-            if (showWindLayer && windTileProvider != null) {
-                TileOverlay(
-                    tileProvider = windTileProvider,
-                    transparency = 0.4f,
-                    zIndex = 2f,
-                    visible = true,
-                    state = rememberTileOverlayState()
+        }
+        
+        // Add wind radar overlay if layer is enabled and URL is available
+        if (showWindLayer && windRadarUrl != null) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(windRadarUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Wind Radar",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    alpha = 0.6f // Make the overlay semi-transparent
                 )
             }
         }
@@ -218,12 +223,74 @@ fun RadarMapComponent(
             }
         }
         
-        // Map controls (conditionally visible)
+        // Main map controls for full screen, location, and my location
+        // Full screen button (top left)
+        IconButton(
+            onClick = onToggleFullScreen,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(8.dp)
+                .size(40.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                    shape = RoundedCornerShape(8.dp)
+                )
+        ) {
+            Icon(
+                imageVector = if (fullScreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                contentDescription = if (fullScreen) "Exit Full Screen" else "Full Screen",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        
+        // Location buttons (top right)
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // My location button
+            IconButton(
+                onClick = onMyLocationClick,
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MyLocation,
+                    contentDescription = "My Location",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            
+            // Manual location button
+            IconButton(
+                onClick = onChangeLocationClick,
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Place,
+                    contentDescription = "Set Manual Location",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+        
+        // Layer controls (conditionally visible)
         if (showControls) {
             MapControls(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp),
+                    .align(Alignment.BottomStart)
+                    .padding(start = 8.dp, bottom = 56.dp),
                 isFullScreen = fullScreen,
                 onToggleFullScreen = onToggleFullScreen,
                 onRefresh = onRefresh,
@@ -252,8 +319,8 @@ fun RadarMapComponent(
                 )
         ) {
             Icon(
-                imageVector = if (showControls) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                contentDescription = if (showControls) "Hide Controls" else "Show Controls",
+                imageVector = if (showControls) Icons.Default.VisibilityOff else Icons.Default.Layers,
+                contentDescription = if (showControls) "Hide Controls" else "Show Layer Controls",
                 tint = MaterialTheme.colorScheme.onSurface
             )
         }
@@ -288,10 +355,10 @@ fun MapControls(
             horizontalAlignment = Alignment.Start,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Refresh and fullscreen controls
+            // Refresh control
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
@@ -304,20 +371,7 @@ fun MapControls(
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
-                
-                IconButton(
-                    onClick = onToggleFullScreen,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Map,
-                        contentDescription = if (isFullScreen) "Exit Full Screen" else "Full Screen Map",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
             }
-            
-            HorizontalDivider()
             
             // Layer toggles
             Text(

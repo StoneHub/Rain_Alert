@@ -1,4 +1,3 @@
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -79,6 +78,9 @@ dependencies {
 // Maps
     implementation("com.google.maps.android:maps-compose:2.15.0")
     implementation("com.google.android.gms:play-services-maps:18.2.0")
+    
+// Coil for image loading
+    implementation("io.coil-kt:coil-compose:2.4.0")
     
 // Firebase    
     implementation(platform(libs.firebase.bom))

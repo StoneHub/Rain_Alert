@@ -298,6 +298,14 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     }
     
     /**
+     * Get the last known device location
+     * This is a non-suspending function that can be called directly from Composables
+     */
+    fun getLastKnownLocation(): Location? {
+        return weatherRepository.getLastKnownLocation()
+    }
+    
+    /**
      * Select the 3 closest stations as default
      */
     private fun selectDefaultStations() {

@@ -129,7 +129,16 @@ fun WeatherCarousel(
                                     weatherViewModel.updateWeatherStatus()
                                 },
                                 fullScreen = false,
-                                onToggleFullScreen = { showFullScreenRadar = true }
+                                onToggleFullScreen = { showFullScreenRadar = true },
+                                onMyLocationClick = {
+                                    // Use device location and center map without refreshing data
+                                    val location = weatherViewModel.getLastKnownLocation()
+                                    if (location != null) {
+                                        radarMapViewModel.updateMapCenter(LatLng(location.latitude, location.longitude))
+                                        radarMapViewModel.updateMapZoom(9f) // Zoom in to a good level for local viewing
+                                    }
+                                },
+                                onChangeLocationClick = onChangeLocationClick
                             )
                         }
                     }
@@ -248,7 +257,16 @@ fun WeatherCarousel(
                         weatherViewModel.updateWeatherStatus()
                     },
                     fullScreen = true,
-                    onToggleFullScreen = { showFullScreenRadar = false }
+                    onToggleFullScreen = { showFullScreenRadar = false },
+                    onMyLocationClick = {
+                        // Use device location and center map without refreshing data
+                        val location = weatherViewModel.getLastKnownLocation()
+                        if (location != null) {
+                            radarMapViewModel.updateMapCenter(LatLng(location.latitude, location.longitude))
+                            radarMapViewModel.updateMapZoom(9f) // Zoom in to a good level for local viewing
+                        }
+                    },
+                    onChangeLocationClick = onChangeLocationClick
                 )
             }
         }

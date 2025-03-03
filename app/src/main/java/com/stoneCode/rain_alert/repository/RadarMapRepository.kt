@@ -27,16 +27,12 @@ class RadarMapRepository(private val context: Context) {
      */
     suspend fun getPrecipitationRadarUrl(center: LatLng): Result<String> = withContext(Dispatchers.IO) {
         try {
-            // Weather.gov radar endpoint
+            // National Weather Service radar endpoint for reflectivity
             // Documentation: https://www.weather.gov/documentation/services-web-api
-            // We're constructing a URL for radar precipitation data
+            // We're using the standard reflectivity product which shows precipitation
             
-            // This constructs a WMS URL for the radar layer
-            val radarUrl = "https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/wms?" +
-                    "SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&" +
-                    "TRANSPARENT=true&LAYERS=conus_bref_qcd&" +
-                    "STYLES=&WIDTH=512&HEIGHT=512&CRS=EPSG:3857&" +
-                    "BBOX=${center.longitude - 2},${center.latitude - 2},${center.longitude + 2},${center.latitude + 2}"
+            // Update to use the NWS base reflectivity product
+            val radarUrl = "https://radar.weather.gov/ridge/lite/CONUS_BREF_LIT.png"
             
             // Verify the URL works by making a request
             val request = Request.Builder()
@@ -63,12 +59,8 @@ class RadarMapRepository(private val context: Context) {
      */
     suspend fun getWindRadarUrl(center: LatLng): Result<String> = withContext(Dispatchers.IO) {
         try {
-            // Weather.gov wind data endpoint
-            val windUrl = "https://opengeo.ncep.noaa.gov/geoserver/conus/conus_wind_speed/wms?" +
-                    "SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&" +
-                    "TRANSPARENT=true&LAYERS=conus_wind_speed&" +
-                    "STYLES=&WIDTH=512&HEIGHT=512&CRS=EPSG:3857&" +
-                    "BBOX=${center.longitude - 2},${center.latitude - 2},${center.longitude + 2},${center.latitude + 2}"
+            // Use wind velocity product from NWS
+            val windUrl = "https://radar.weather.gov/ridge/lite/CONUS_VELO_LIT.png"
             
             // Verify the URL works
             val request = Request.Builder()
