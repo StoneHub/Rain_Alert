@@ -117,11 +117,5 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
             fetchRadarData(center)
         }
     }
-    
-//    /**
-//     * Get the application context
-//     */
-//    fun getApplication(): Application {
-//        return getApplication<Application>()
-//    }
+
 }
