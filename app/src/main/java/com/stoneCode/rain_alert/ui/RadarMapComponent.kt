@@ -1,8 +1,5 @@
 package com.stoneCode.rain_alert.ui
 
-import android.content.Context
-import android.os.Bundle
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,41 +41,42 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
-import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.GroundOverlay
 import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.LatLngBounds
-import com.google.android.gms.maps.model.MarkerOptions
-import com.google.android.gms.maps.model.PolygonOptions
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.Polygon
+import com.google.maps.android.compose.rememberCameraPositionState
 import com.stoneCode.rain_alert.api.WeatherStation
 import com.stoneCode.rain_alert.repository.RadarMapRepository
-import com.stoneCode.rain_alert.ui.map.MapOverlayManager
+import com.stoneCode.rain_alert.ui.interop.MapViewCapture
+import com.stoneCode.rain_alert.ui.interop.MapViewCaptureHelper
+import com.stoneCode.rain_alert.ui.map.RadarOverlayHelper
 import com.stoneCode.rain_alert.viewmodel.RadarMapViewModel
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-
-private const val TAG = "RadarMapComponent"
 
 /** A component that displays a radar map with weather data overlays.
  *
- * This implementation uses AndroidView to host a native MapView, giving direct access
- * to the GoogleMap instance for overlay manipulation.
+ * Added modifications:
+ * - Accepts an optional myLocation parameter to center the map on your location.
+ * - Shows a marker for your current location.
+ * - Maintains the camera position by using myLocation (if provided) as the default center.
+ * - Long-click (via a simple onClick, since long click isn't directly supported) on station markers
+ *   will show a dialog with station information.
+ * - Preserves camera position when component recomposes
+ * - Properly aligned radar imagery overlays
  */
 @Composable
 fun RadarMapComponent(
@@ -101,14 +99,17 @@ fun RadarMapComponent(
     var showControls by remember { mutableStateOf(false) }
     var showPrecipitationLayer by remember { mutableStateOf(true) }
     var showWindLayer by remember { mutableStateOf(false) }
+    var showTemperatureLayer by remember { mutableStateOf(false) }
     var showStationsLayer by remember { mutableStateOf(true) }
     var showTriangleLayer by remember { mutableStateOf(selectedStations.size >= 3) }
 
     // Get radar data from view model
     val precipitationRadarUrl by radarMapViewModel.precipitationRadarUrl.observeAsState()
     val windRadarUrl by radarMapViewModel.windRadarUrl.observeAsState()
+    val temperatureRadarUrl by radarMapViewModel.temperatureRadarUrl.observeAsState()
     val isRadarLoading by radarMapViewModel.isLoading.observeAsState(false)
     val errorMessage by radarMapViewModel.errorMessage.observeAsState()
+    val isTemperatureLayerEnabled by radarMapViewModel.showTemperatureLayer.observeAsState(false)
 
     // Get repository instance for calculations
     val radarMapRepository = remember { RadarMapRepository(radarMapViewModel.getApplication()) }
@@ -116,176 +117,229 @@ fun RadarMapComponent(
     // Use myLocation as default center if available
     val initialCenter = myLocation ?: centerLatLng
 
+    // Key to track if we've initialized the map position (prevents jumps on recomposition)
+    val initialized = remember { mutableStateOf(false) }
+    
+    // IMPORTANT: Remember the camera position state to prevent reset on recomposition
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(initialCenter, if (fullScreen) 12f else 9f)
+    }
+    
+    // Initialize with auto-fit zoom based on selected stations, if available
+    LaunchedEffect(selectedStations, myLocation) {
+        if (!initialized.value) {
+            if (selectedStations.isNotEmpty()) {
+                val (center, zoom) = radarMapRepository.calculateMapViewForStations(selectedStations)
+                radarMapViewModel.updateMapCenter(center)
+                radarMapViewModel.updateMapZoom(zoom)
+                // Update camera position
+                cameraPositionState.position = CameraPosition.fromLatLngZoom(center, zoom)
+            } else if (myLocation != null) {
+                radarMapViewModel.updateMapCenter(myLocation)
+                // Set a default zoom for your location
+                radarMapViewModel.updateMapZoom(12f)
+                // Update camera position
+                cameraPositionState.position = CameraPosition.fromLatLngZoom(myLocation, 12f)
+            }
+            initialized.value = true
+        }
+    }
+
     // Get map data from view model
     val mapCenter by radarMapViewModel.mapCenter.observeAsState(initialCenter)
     val mapZoom by radarMapViewModel.mapZoom.observeAsState(if (fullScreen) 12f else 9f)
     
-    // Key to track if we've initialized the map position (prevents jumps on recomposition)
-    val initialized = remember { mutableStateOf(false) }
-    
-    // References to store map and overlays
-    var googleMap by remember { mutableStateOf<GoogleMap?>(null) }
-    var precipitationOverlay by remember { mutableStateOf<GroundOverlay?>(null) }
-    var windOverlay by remember { mutableStateOf<GroundOverlay?>(null) }
-    
-    // Context for adding overlays
-    val context = LocalContext.current
+    // Update the view model with the latest camera position when it changes
+    // This ensures we remember where the user panned/zoomed
+    LaunchedEffect(cameraPositionState.position) {
+        if (initialized.value && !cameraPositionState.isMoving) {
+            radarMapViewModel.updateMapCenter(cameraPositionState.position.target)
+            radarMapViewModel.updateMapZoom(cameraPositionState.position.zoom)
+        }
+    }
 
-    // Initialize MapView with lifecycle awareness
-    val mapView = rememberMapViewWithLifecycle()
+    // Animate camera position if the map center or zoom is explicitly changed
+    // (e.g., when clicking on location button)
+    LaunchedEffect(mapCenter, mapZoom) {
+        if (initialized.value) {
+            val currentTarget = cameraPositionState.position.target
+            val currentZoom = cameraPositionState.position.zoom
+            
+            // Only animate if there's an actual change to avoid loops
+            if (currentTarget != mapCenter || currentZoom != mapZoom) {
+                cameraPositionState.animate(
+                    CameraUpdateFactory.newCameraPosition(
+                        CameraPosition(mapCenter, mapZoom, 0f, 0f)
+                    ),
+                    durationMs = 1000
+                )
+            }
+        }
+    }
+
+    // Fetch radar data if needed
+    LaunchedEffect(mapCenter) {
+        radarMapViewModel.fetchRadarData(mapCenter)
+    }
+
+    // Get context for radar overlay helper
+    val context = LocalContext.current
     
-    // Box that contains the map and UI controls
+    // We'll use this flag to know when the GoogleMap is ready for overlays
+    var mapReady by remember { mutableStateOf(false) }
+    
+    // We'll use this to store the GoogleMap instance for overlay management
+    var googleMapInstance by remember { mutableStateOf<GoogleMap?>(null) }
+    
+    // Clean up resources when component is dismounted
+    var mapViewRef by remember { mutableStateOf<com.google.android.gms.maps.MapView?>(null) }
+    DisposableEffect(Unit) {
+        onDispose {
+            // Clean up map overlays
+            RadarOverlayHelper.removeAllOverlays()
+            
+            // Clean up MapView to prevent memory leaks
+            mapViewRef?.let { mapView ->
+                mapView.onPause()
+                mapView.onDestroy()
+            }
+        }
+    }
+    
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(if (fullScreen) 500.dp else 200.dp)
             .clip(shape = RoundedCornerShape(12.dp))
     ) {
-        // MapView wrapped in AndroidView
-        AndroidView(
-            factory = { mapView },
-            modifier = Modifier.fillMaxSize()
-        ) { mapView ->
-            // Get map asynchronously
-            mapView.getMapAsync { map ->
-                googleMap = map
-                
-                // Configure map settings
-                map.uiSettings.apply {
-                    isZoomControlsEnabled = false
-                    isMapToolbarEnabled = false
-                    isMyLocationButtonEnabled = false
-                    isCompassEnabled = fullScreen
-                }
-                
-                // Set my location enabled if available
-                map.isMyLocationEnabled = myLocation != null
-                
-                // Initial camera position
-                if (!initialized.value) {
-                    // Set initial position based on selected stations or my location
-                    if (selectedStations.isNotEmpty()) {
-                        val (center, zoom) = radarMapRepository.calculateMapViewForStations(selectedStations)
-                        radarMapViewModel.updateMapCenter(center)
-                        radarMapViewModel.updateMapZoom(zoom)
-                        
-                        map.moveCamera(
-                            CameraUpdateFactory.newCameraPosition(
-                                CameraPosition.fromLatLngZoom(center, zoom)
-                            )
-                        )
-                    } else if (myLocation != null) {
-                        radarMapViewModel.updateMapCenter(myLocation)
-                        radarMapViewModel.updateMapZoom(12f)
-                        
-                        map.moveCamera(
-                            CameraUpdateFactory.newCameraPosition(
-                                CameraPosition.fromLatLngZoom(myLocation, 12f)
-                            )
-                        )
-                    } else {
-                        map.moveCamera(
-                            CameraUpdateFactory.newCameraPosition(
-                                CameraPosition.fromLatLngZoom(mapCenter, mapZoom)
-                            )
-                        )
-                    }
-                    
-                    initialized.value = true
-                    
-                    // Fetch radar data for initial position
-                    radarMapViewModel.fetchRadarData(map.cameraPosition.target)
-                }
-                
-                // Set up camera change listener to update ViewModel
-                map.setOnCameraIdleListener {
-                    if (initialized.value) {
-                        val position = map.cameraPosition
-                        radarMapViewModel.updateMapCenter(position.target)
-                        radarMapViewModel.updateMapZoom(position.zoom)
-                    }
-                }
-                
-                // Set up marker click listener
-                map.setOnMarkerClickListener { marker ->
-                    val stationId = marker.tag as? String
-                    if (stationId != null) {
-                        selectedStation = selectedStations.find { it.id == stationId }
-                        true
-                    } else {
-                        false
-                    }
-                }
-                
-                // Update map with overlays and markers
-                updateMapContent(
-                    map = map,
-                    context = context,
-                    selectedStations = selectedStations,
-                    myLocation = myLocation,
-                    showStationsLayer = showStationsLayer,
-                    showTriangleLayer = showTriangleLayer,
-                    precipitationRadarUrl = if (showPrecipitationLayer) precipitationRadarUrl else null,
-                    windRadarUrl = if (showWindLayer) windRadarUrl else null,
-                    currentPrecipitationOverlay = precipitationOverlay,
-                    currentWindOverlay = windOverlay,
-                    onPrecipitationOverlayCreated = { precipitationOverlay = it },
-                    onWindOverlayCreated = { windOverlay = it }
-                )
+        // Google Map with radar overlay
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraPositionState,
+            properties = MapProperties(
+                // Enable showing the blue dot for user's location
+                isMyLocationEnabled = myLocation != null,
+                // Use terrain type to see mountains and terrain details
+                mapType = com.google.maps.android.compose.MapType.TERRAIN
+            ),
+            uiSettings = MapUiSettings(
+                zoomControlsEnabled = false,
+                mapToolbarEnabled = false,
+                myLocationButtonEnabled = false, // We'll use our own button
+                compassEnabled = fullScreen,
+                // Enable all gestures for better interaction
+                rotationGesturesEnabled = true,
+                scrollGesturesEnabled = true,
+                tiltGesturesEnabled = true,
+                zoomGesturesEnabled = true
+            ),
+            onMapLoaded = {
+                android.util.Log.d("RadarMapComponent", "Map loaded and ready for overlays")
+                mapReady = true
             }
-        }
-        
-        // Effect to update map when layer visibility or radar URLs change
-        LaunchedEffect(
-            showPrecipitationLayer, showWindLayer, showStationsLayer, showTriangleLayer,
-            precipitationRadarUrl, windRadarUrl, selectedStations, myLocation
         ) {
-            googleMap?.let { map ->
-                updateMapContent(
-                    map = map,
-                    context = context,
-                    selectedStations = selectedStations,
-                    myLocation = myLocation,
-                    showStationsLayer = showStationsLayer,
-                    showTriangleLayer = showTriangleLayer,
-                    precipitationRadarUrl = if (showPrecipitationLayer) precipitationRadarUrl else null,
-                    windRadarUrl = if (showWindLayer) windRadarUrl else null,
-                    currentPrecipitationOverlay = precipitationOverlay,
-                    currentWindOverlay = windOverlay,
-                    onPrecipitationOverlayCreated = { precipitationOverlay = it },
-                    onWindOverlayCreated = { windOverlay = it }
+            // Add triangular area between stations if enabled and enough stations
+            // This goes between the overlays and markers
+            if (showTriangleLayer && selectedStations.size >= 3) {
+                val stationPositions = selectedStations.take(3).map {
+                    LatLng(it.latitude, it.longitude)
+                }
+                Polygon(
+                    points = stationPositions,
+                    fillColor = Color.Blue.copy(alpha = 0.2f),
+                    strokeColor = Color.Blue.copy(alpha = 0.5f),
+                    strokeWidth = 2f,
+                    zIndex = 1f // Above radar overlays but below markers
+                )
+            }
+            
+            // Add station markers if layer is enabled
+            if (showStationsLayer) {
+                selectedStations.forEach { station ->
+                    val position = LatLng(station.latitude, station.longitude)
+                    Marker(
+                        state = MarkerState(position = position),
+                        title = station.name,
+                        snippet = "Distance: ${String.format("%.1f", station.distance)} km",
+                        icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED),
+                        zIndex = 2.0f, // Above overlays and triangles
+                        onClick = {
+                            // Simulate a long click by showing a dialog with station info
+                            selectedStation = station
+                            true
+                        }
+                    )
+                }
+            }
+            
+            // Always show user location marker on top of everything if available
+            if (myLocation != null) {
+                Marker(
+                    state = MarkerState(position = myLocation),
+                    title = "You are here",
+                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE),
+                    zIndex = 3.0f  // Highest z-index to always be on top
                 )
             }
         }
         
-        // Effect to update camera position when mapCenter or mapZoom change in ViewModel
-        LaunchedEffect(mapCenter, mapZoom) {
-            googleMap?.let { map ->
-                if (initialized.value) {
-                    val currentTarget = map.cameraPosition.target
-                    val currentZoom = map.cameraPosition.zoom
-                    
-                    // Only animate if there's an actual change to avoid loops
-                    if (currentTarget != mapCenter || currentZoom != mapZoom) {
-                        map.animateCamera(
-                            CameraUpdateFactory.newCameraPosition(
-                                CameraPosition(mapCenter, mapZoom, 0f, 0f)
-                            ),
-                            1000,
-                            null
-                        )
-                    }
+        // Get the GoogleMap instance for overlays using MapViewCapture
+        MapViewCapture(
+            modifier = Modifier.size(1.dp),
+            onMapReady = { googleMap ->
+                googleMapInstance = googleMap
+                radarMapViewModel.setGoogleMapInstance(googleMap)
+                android.util.Log.d("RadarMapComponent", "GoogleMap instance obtained via MapViewCapture")
+                
+                // Apply overlays immediately if URLs are available
+                precipitationRadarUrl?.let { url ->
+                    RadarOverlayHelper.showPrecipitationOverlay(googleMap, context, url, showPrecipitationLayer)
                 }
+                
+                windRadarUrl?.let { url ->
+                    RadarOverlayHelper.showWindOverlay(googleMap, context, url, showWindLayer)
+                }
+                
+                temperatureRadarUrl?.let { url ->
+                    RadarOverlayHelper.showTemperatureOverlay(googleMap, context, url, isTemperatureLayerEnabled)
+                }
+            },
+            onViewCreated = { mapView ->
+                mapViewRef = mapView
+            }
+        )
+        
+        // Update overlays when layer visibility or URLs change
+        LaunchedEffect(googleMapInstance, showPrecipitationLayer, precipitationRadarUrl) {
+            googleMapInstance?.let { map ->
+                RadarOverlayHelper.showPrecipitationOverlay(
+                    map = map,
+                    context = context,
+                    url = precipitationRadarUrl,
+                    showLayer = showPrecipitationLayer
+                )
             }
         }
         
-        // Clean up overlays when component is disposed
-        DisposableEffect(Unit) {
-            onDispose {
-                MapOverlayManager.removeOverlay(precipitationOverlay)
-                MapOverlayManager.removeOverlay(windOverlay)
-                precipitationOverlay = null
-                windOverlay = null
+        LaunchedEffect(googleMapInstance, showWindLayer, windRadarUrl) {
+            googleMapInstance?.let { map ->
+                RadarOverlayHelper.showWindOverlay(
+                    map = map,
+                    context = context,
+                    url = windRadarUrl,
+                    showLayer = showWindLayer
+                )
+            }
+        }
+        
+        LaunchedEffect(googleMapInstance, isTemperatureLayerEnabled, temperatureRadarUrl) {
+            googleMapInstance?.let { map ->
+                RadarOverlayHelper.showTemperatureOverlay(
+                    map = map,
+                    context = context,
+                    url = temperatureRadarUrl,
+                    showLayer = isTemperatureLayerEnabled
+                )
             }
         }
 
@@ -378,6 +432,8 @@ fun RadarMapComponent(
                 onTogglePrecipitation = { showPrecipitationLayer = !showPrecipitationLayer },
                 showWind = showWindLayer,
                 onToggleWind = { showWindLayer = !showWindLayer },
+                showTemperature = isTemperatureLayerEnabled,
+                onToggleTemperature = { radarMapViewModel.toggleTemperatureLayer() },
                 showStations = showStationsLayer,
                 onToggleStations = { showStationsLayer = !showStationsLayer },
                 showTriangle = showTriangleLayer,
@@ -455,152 +511,6 @@ fun RadarMapComponent(
     }
 }
 
-/**
- * Updates the map content with overlays, markers, and other visual elements
- */
-private fun updateMapContent(
-    map: GoogleMap,
-    context: Context,
-    selectedStations: List<WeatherStation>,
-    myLocation: LatLng?,
-    showStationsLayer: Boolean,
-    showTriangleLayer: Boolean,
-    precipitationRadarUrl: String?,
-    windRadarUrl: String?,
-    currentPrecipitationOverlay: GroundOverlay?,
-    currentWindOverlay: GroundOverlay?,
-    onPrecipitationOverlayCreated: (GroundOverlay?) -> Unit,
-    onWindOverlayCreated: (GroundOverlay?) -> Unit
-) {
-    // Clear map of all markers
-    map.clear()
-    
-    // Add triangular area between stations if enabled and enough stations
-    if (showTriangleLayer && selectedStations.size >= 3) {
-        val stationPositions = selectedStations.take(3).map {
-            LatLng(it.latitude, it.longitude)
-        }
-        
-        map.addPolygon(
-            PolygonOptions()
-                .addAll(stationPositions)
-                .fillColor(Color.Blue.copy(alpha = 0.2f).toArgb())
-                .strokeColor(Color.Blue.copy(alpha = 0.5f).toArgb())
-                .strokeWidth(2f)
-                .zIndex(1f) // Above radar overlays but below markers
-        )
-    }
-    
-    // Add station markers if layer is enabled
-    if (showStationsLayer) {
-        selectedStations.forEach { station ->
-            val position = LatLng(station.latitude, station.longitude)
-            val marker = map.addMarker(
-                MarkerOptions()
-                    .position(position)
-                    .title(station.name)
-                    .snippet("Distance: ${String.format("%.1f", station.distance)} km")
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED))
-                    .zIndex(2.0f) // Above overlays and triangles
-            )
-            
-            // Store station ID as marker tag for identification in click handler
-            marker?.tag = station.id
-        }
-    }
-    
-    // Always show user location marker on top of everything if available
-    if (myLocation != null) {
-        map.addMarker(
-            MarkerOptions()
-                .position(myLocation)
-                .title("You are here")
-                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
-                .zIndex(3.0f)  // Highest z-index to always be on top
-        )
-    }
-    
-    // Handle precipitation overlay
-    if (precipitationRadarUrl != null) {
-        // Remove existing overlay
-        MapOverlayManager.removeOverlay(currentPrecipitationOverlay)
-        
-        // Add new overlay
-        MapOverlayManager.addGroundOverlayFromUrl(
-            googleMap = map,
-            context = context,
-            imageUrl = precipitationRadarUrl,
-            alpha = 0.7f,
-            zIndex = 0f,
-            callback = { overlay ->
-                onPrecipitationOverlayCreated(overlay)
-            }
-        )
-    } else {
-        // Remove overlay if the layer is disabled
-        MapOverlayManager.removeOverlay(currentPrecipitationOverlay)
-        onPrecipitationOverlayCreated(null)
-    }
-    
-    // Handle wind overlay
-    if (windRadarUrl != null) {
-        // Remove existing overlay
-        MapOverlayManager.removeOverlay(currentWindOverlay)
-        
-        // Add new overlay
-        MapOverlayManager.addGroundOverlayFromUrl(
-            googleMap = map,
-            context = context,
-            imageUrl = windRadarUrl,
-            alpha = 0.5f,
-            zIndex = 0.5f, // Just above precipitation overlay
-            callback = { overlay ->
-                onWindOverlayCreated(overlay)
-            }
-        )
-    } else {
-        // Remove overlay if the layer is disabled
-        MapOverlayManager.removeOverlay(currentWindOverlay)
-        onWindOverlayCreated(null)
-    }
-}
-
-/**
- * Remembers a MapView with lifecycle handling
- */
-@Composable
-fun rememberMapViewWithLifecycle(): MapView {
-    val context = LocalContext.current
-    val mapView = remember { MapView(context) }
-    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
-    
-    DisposableEffect(lifecycle, mapView) {
-        // Create lifecycle observer
-        val lifecycleObserver = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_CREATE -> mapView.onCreate(Bundle())
-                Lifecycle.Event.ON_START -> mapView.onStart()
-                Lifecycle.Event.ON_RESUME -> mapView.onResume()
-                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
-                Lifecycle.Event.ON_STOP -> mapView.onStop()
-                Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
-                else -> {}
-            }
-        }
-        
-        // Add the observer to the lifecycle
-        lifecycle.addObserver(lifecycleObserver)
-        
-        // Remove observer when effect leaves composition
-        onDispose {
-            lifecycle.removeObserver(lifecycleObserver)
-            mapView.onDestroy()
-        }
-    }
-    
-    return mapView
-}
-
 @Composable
 fun MapControls(
     modifier: Modifier = Modifier,
@@ -611,6 +521,8 @@ fun MapControls(
     onTogglePrecipitation: () -> Unit = {},
     showWind: Boolean = false,
     onToggleWind: () -> Unit = {},
+    showTemperature: Boolean = false,
+    onToggleTemperature: () -> Unit = {},
     showStations: Boolean = true,
     onToggleStations: () -> Unit = {},
     showTriangle: Boolean = false,
@@ -668,6 +580,13 @@ fun MapControls(
                 checked = showWind,
                 onCheckedChange = onToggleWind
             )
+            
+            // Temperature layer toggle
+            LayerToggle(
+                label = "Temperature",
+                checked = showTemperature,
+                onCheckedChange = onToggleTemperature
+            )
 
             // Stations layer toggle
             LayerToggle(
@@ -717,6 +636,9 @@ fun LayerToggle(
         )
     }
 }
+
+
+// No longer needed since we're using RadarOverlayManager directly
 
 // Preview
 @Preview(showBackground = true, widthDp = 360)

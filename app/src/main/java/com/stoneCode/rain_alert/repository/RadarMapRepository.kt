@@ -27,13 +27,26 @@ class RadarMapRepository(private val context: Context) {
      */
     suspend fun getPrecipitationRadarUrl(center: LatLng): Result<String> = withContext(Dispatchers.IO) {
         try {
-            // National Weather Service radar endpoint for reflectivity
-            // Documentation: https://www.weather.gov/documentation/services-web-api
-            // We're using the standard reflectivity product which shows precipitation
+            // Use the NWS WMS service for precipitation data (Quantitative Precipitation Forecast)
+            // See: https://digital.weather.gov/ndfd.conus/wms?REQUEST=GetCapabilities
             
-            // Update to use the NWS base reflectivity product for the Continental US
-            // This provides a nationwide view of precipitation
-            val radarUrl = "https://radar.weather.gov/ridge/standard/CONUS_BREF_LIT.png"
+            // Create a proper WMS request URL
+            // Parameters explained:
+            // SERVICE=WMS - The service type
+            // VERSION=1.3.0 - WMS version
+            // REQUEST=GetMap - We want a map image
+            // LAYERS=ndfd.conus.qpf - Quantitative Precipitation Forecast layer
+            // FORMAT=image/png - Image format
+            // TRANSPARENT=TRUE - Allow transparency
+            // CRS=EPSG:3857 - Coordinate reference system (Web Mercator)
+            // WIDTH, HEIGHT - Image dimensions
+            // BBOX - Bounding box coordinates
+            // VTIT - Valid time (current date/time formatted as 2025-03-04T00:00)
+            
+            // Use our helper function to create the WMS URL
+            val radarUrl = createWmsUrl("ndfd.conus.qpf") // Quantitative Precipitation Forecast
+            
+            Log.d("RadarMapRepository", "Generated WMS URL: $radarUrl")
             
             // Verify the URL works by making a request
             val request = Request.Builder()
@@ -45,7 +58,7 @@ class RadarMapRepository(private val context: Context) {
             
             if (!response.isSuccessful) {
                 Log.e("RadarMapRepository", "Failed to verify radar URL: ${response.code}")
-                return@withContext Result.failure(Exception("Failed to get radar data: ${response.code}"))
+                return@withContext Result.failure(Exception("Failed to get radar data: ${response.code} - ${response.message}"))
             }
             
             Result.success(radarUrl)
@@ -60,9 +73,13 @@ class RadarMapRepository(private val context: Context) {
      */
     suspend fun getWindRadarUrl(center: LatLng): Result<String> = withContext(Dispatchers.IO) {
         try {
-            // Use wind velocity product from NWS for the Continental US
-            // This provides a nationwide view of wind patterns
-            val windUrl = "https://radar.weather.gov/ridge/standard/CONUS_VELO_LIT.png"
+            // Use the NWS WMS service for wind data
+            // See: https://digital.weather.gov/ndfd.conus/wms?REQUEST=GetCapabilities
+            
+            // Use our helper function to create the WMS URL
+            val windUrl = createWmsUrl("ndfd.conus.windspd") // Wind Speed layer
+            
+            Log.d("RadarMapRepository", "Generated Wind WMS URL: $windUrl")
             
             // Verify the URL works
             val request = Request.Builder()
@@ -74,7 +91,7 @@ class RadarMapRepository(private val context: Context) {
             
             if (!response.isSuccessful) {
                 Log.e("RadarMapRepository", "Failed to verify wind URL: ${response.code}")
-                return@withContext Result.failure(Exception("Failed to get wind data: ${response.code}"))
+                return@withContext Result.failure(Exception("Failed to get wind data: ${response.code} - ${response.message}"))
             }
             
             Result.success(windUrl)
@@ -82,6 +99,34 @@ class RadarMapRepository(private val context: Context) {
             Log.e("RadarMapRepository", "Error fetching wind data", e)
             Result.failure(e)
         }
+    }
+    
+    /**
+     * Generate a WMS URL for the specified layer and parameters
+     */
+    private fun createWmsUrl(
+        layer: String,
+        bbox: String = "-14200679.12,2500000,-7400000,6505689.94",
+        width: Int = 1000,
+        height: Int = 600
+    ): String {
+        // Format the current date for the VTIT parameter
+        val calendar = java.util.Calendar.getInstance()
+        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:00", java.util.Locale.US)
+        val validTime = dateFormat.format(calendar.time)
+        
+        return "https://digital.weather.gov/ndfd.conus/wms?" +
+            "SERVICE=WMS" +
+            "&VERSION=1.3.0" +
+            "&REQUEST=GetMap" +
+            "&LAYERS=$layer" +
+            "&FORMAT=image/png" +
+            "&TRANSPARENT=TRUE" +
+            "&CRS=EPSG:3857" +
+            "&WIDTH=$width" +
+            "&HEIGHT=$height" +
+            "&BBOX=$bbox" +
+            "&VTIT=$validTime"
     }
     
     /**

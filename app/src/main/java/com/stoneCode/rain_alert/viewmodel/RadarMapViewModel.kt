@@ -5,12 +5,17 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.LatLng
 import com.stoneCode.rain_alert.api.WeatherStation
 import com.stoneCode.rain_alert.repository.RadarMapRepository
 import kotlinx.coroutines.launch
 
 class RadarMapViewModel(application: Application) : AndroidViewModel(application) {
+    
+    // Reference to GoogleMap instance for overlays
+    var googleMapInstance: GoogleMap? = null
+        private set
     
     private val radarMapRepository = RadarMapRepository(application)
     
@@ -31,6 +36,13 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
     
     private val _windRadarUrl = MutableLiveData<String>()
     val windRadarUrl: LiveData<String> = _windRadarUrl
+    
+    // Temperature layer
+    private val _showTemperatureLayer = MutableLiveData<Boolean>(false)
+    val showTemperatureLayer: LiveData<Boolean> = _showTemperatureLayer
+    
+    private val _temperatureRadarUrl = MutableLiveData<String>()
+    val temperatureRadarUrl: LiveData<String> = _temperatureRadarUrl
     
     // Loading state
     private val _isLoading = MutableLiveData<Boolean>(false)
@@ -117,5 +129,71 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
             fetchRadarData(center)
         }
     }
-
+    
+    /**
+     * Set the GoogleMap instance for use with overlays
+     */
+    fun setGoogleMapInstance(map: GoogleMap) {
+        googleMapInstance = map
+    }
+    
+    /**
+     * Toggle temperature layer visibility
+     */
+    fun toggleTemperatureLayer() {
+        val currentValue = _showTemperatureLayer.value ?: false
+        _showTemperatureLayer.value = !currentValue
+        
+        // Fetch temperature data if it's now enabled but we don't have data yet
+        if (!currentValue && _temperatureRadarUrl.value == null) {
+            fetchTemperatureData()
+        }
+    }
+    
+    /**
+     * Fetch temperature radar data
+     */
+    private fun fetchTemperatureData() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                // For simplicity, we'll use a hardcoded bbox for the continental US
+                // A more advanced implementation would calculate this based on the view bounds
+                val temperatureUrl = "https://digital.weather.gov/ndfd.conus/wms?" +
+                    "SERVICE=WMS" +
+                    "&VERSION=1.3.0" +
+                    "&REQUEST=GetMap" +
+                    "&LAYERS=ndfd.conus.temp" +  // Temperature layer
+                    "&FORMAT=image/png" +
+                    "&TRANSPARENT=TRUE" +
+                    "&CRS=EPSG:3857" +
+                    "&WIDTH=1000" +
+                    "&HEIGHT=600" +
+                    "&BBOX=-14200679.12,2500000,-7400000,6505689.94" +
+                    "&VTIT=" + getCurrentFormattedTime()
+                
+                _temperatureRadarUrl.value = temperatureUrl
+            } catch (e: Exception) {
+                _errorMessage.value = "Error loading temperature data: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+    
+    /**
+     * Helper method to get current time formatted for WMS requests
+     */
+    private fun getCurrentFormattedTime(): String {
+        val calendar = java.util.Calendar.getInstance()
+        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:00", java.util.Locale.US)
+        return dateFormat.format(calendar.time)
+    }
+    
+//    /**
+//     * Get the application context
+//     */
+//    fun getApplication(): Application {
+//        return getApplication<Application>()
+//    }
 }
