@@ -30,7 +30,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
@@ -45,16 +44,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapType
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
@@ -62,9 +60,7 @@ import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.stoneCode.rain_alert.api.WeatherStation
 import com.stoneCode.rain_alert.repository.RadarMapRepository
-import com.stoneCode.rain_alert.ui.interop.MapViewCapture
-import com.stoneCode.rain_alert.ui.interop.MapViewCaptureHelper
-import com.stoneCode.rain_alert.ui.map.RadarOverlayHelper
+import com.stoneCode.rain_alert.ui.map.WeatherOverlay
 import com.stoneCode.rain_alert.viewmodel.RadarMapViewModel
 
 /** A component that displays a radar map with weather data overlays.
@@ -76,7 +72,7 @@ import com.stoneCode.rain_alert.viewmodel.RadarMapViewModel
  * - Long-click (via a simple onClick, since long click isn't directly supported) on station markers
  *   will show a dialog with station information.
  * - Preserves camera position when component recomposes
- * - Properly aligned radar imagery overlays
+ * - Properly aligned radar imagery overlays via direct Compose overlay approach
  */
 @Composable
 fun RadarMapComponent(
@@ -99,7 +95,6 @@ fun RadarMapComponent(
     var showControls by remember { mutableStateOf(false) }
     var showPrecipitationLayer by remember { mutableStateOf(true) }
     var showWindLayer by remember { mutableStateOf(false) }
-    var showTemperatureLayer by remember { mutableStateOf(false) }
     var showStationsLayer by remember { mutableStateOf(true) }
     var showTriangleLayer by remember { mutableStateOf(selectedStations.size >= 3) }
 
@@ -182,29 +177,11 @@ fun RadarMapComponent(
         radarMapViewModel.fetchRadarData(mapCenter)
     }
 
-    // Get context for radar overlay helper
+    // Get context
     val context = LocalContext.current
     
-    // We'll use this flag to know when the GoogleMap is ready for overlays
+    // Flag for when map is loaded and ready
     var mapReady by remember { mutableStateOf(false) }
-    
-    // We'll use this to store the GoogleMap instance for overlay management
-    var googleMapInstance by remember { mutableStateOf<GoogleMap?>(null) }
-    
-    // Clean up resources when component is dismounted
-    var mapViewRef by remember { mutableStateOf<com.google.android.gms.maps.MapView?>(null) }
-    DisposableEffect(Unit) {
-        onDispose {
-            // Clean up map overlays
-            RadarOverlayHelper.removeAllOverlays()
-            
-            // Clean up MapView to prevent memory leaks
-            mapViewRef?.let { mapView ->
-                mapView.onPause()
-                mapView.onDestroy()
-            }
-        }
-    }
     
     Box(
         modifier = modifier
@@ -212,22 +189,19 @@ fun RadarMapComponent(
             .height(if (fullScreen) 500.dp else 200.dp)
             .clip(shape = RoundedCornerShape(12.dp))
     ) {
-        // Google Map with radar overlay
+        // Google Map with all elements including weather overlays
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
             properties = MapProperties(
-                // Enable showing the blue dot for user's location
                 isMyLocationEnabled = myLocation != null,
-                // Use terrain type to see mountains and terrain details
-                mapType = com.google.maps.android.compose.MapType.TERRAIN
+                mapType = MapType.TERRAIN  // Use terrain type to see mountains and terrain details
             ),
             uiSettings = MapUiSettings(
                 zoomControlsEnabled = false,
                 mapToolbarEnabled = false,
                 myLocationButtonEnabled = false, // We'll use our own button
                 compassEnabled = fullScreen,
-                // Enable all gestures for better interaction
                 rotationGesturesEnabled = true,
                 scrollGesturesEnabled = true,
                 tiltGesturesEnabled = true,
@@ -238,6 +212,39 @@ fun RadarMapComponent(
                 mapReady = true
             }
         ) {
+            // Add weather overlays if layer is enabled
+            // Note: These are added as children of the GoogleMap composable which makes them visible
+            
+            // Precipitation overlay
+            if (showPrecipitationLayer && precipitationRadarUrl != null) {
+                WeatherOverlay(
+                    imageUrl = precipitationRadarUrl,
+                    visible = true,
+                    transparency = 0.3f,  // 70% opacity
+                    zIndex = 0f           // Below other layers
+                )
+            }
+            
+            // Wind overlay
+            if (showWindLayer && windRadarUrl != null) {
+                WeatherOverlay(
+                    imageUrl = windRadarUrl,
+                    visible = true,
+                    transparency = 0.4f,  // 60% opacity
+                    zIndex = 1f           // Above precipitation
+                )
+            }
+            
+            // Temperature overlay
+            if (isTemperatureLayerEnabled && temperatureRadarUrl != null) {
+                WeatherOverlay(
+                    imageUrl = temperatureRadarUrl,
+                    visible = true,
+                    transparency = 0.3f,  // 70% opacity
+                    zIndex = 2f           // Above other weather layers
+                )
+            }
+            
             // Add triangular area between stations if enabled and enough stations
             // This goes between the overlays and markers
             if (showTriangleLayer && selectedStations.size >= 3) {
@@ -283,66 +290,6 @@ fun RadarMapComponent(
             }
         }
         
-        // Get the GoogleMap instance for overlays using MapViewCapture
-        MapViewCapture(
-            modifier = Modifier.size(1.dp),
-            onMapReady = { googleMap ->
-                googleMapInstance = googleMap
-                radarMapViewModel.setGoogleMapInstance(googleMap)
-                android.util.Log.d("RadarMapComponent", "GoogleMap instance obtained via MapViewCapture")
-                
-                // Apply overlays immediately if URLs are available
-                precipitationRadarUrl?.let { url ->
-                    RadarOverlayHelper.showPrecipitationOverlay(googleMap, context, url, showPrecipitationLayer)
-                }
-                
-                windRadarUrl?.let { url ->
-                    RadarOverlayHelper.showWindOverlay(googleMap, context, url, showWindLayer)
-                }
-                
-                temperatureRadarUrl?.let { url ->
-                    RadarOverlayHelper.showTemperatureOverlay(googleMap, context, url, isTemperatureLayerEnabled)
-                }
-            },
-            onViewCreated = { mapView ->
-                mapViewRef = mapView
-            }
-        )
-        
-        // Update overlays when layer visibility or URLs change
-        LaunchedEffect(googleMapInstance, showPrecipitationLayer, precipitationRadarUrl) {
-            googleMapInstance?.let { map ->
-                RadarOverlayHelper.showPrecipitationOverlay(
-                    map = map,
-                    context = context,
-                    url = precipitationRadarUrl,
-                    showLayer = showPrecipitationLayer
-                )
-            }
-        }
-        
-        LaunchedEffect(googleMapInstance, showWindLayer, windRadarUrl) {
-            googleMapInstance?.let { map ->
-                RadarOverlayHelper.showWindOverlay(
-                    map = map,
-                    context = context,
-                    url = windRadarUrl,
-                    showLayer = showWindLayer
-                )
-            }
-        }
-        
-        LaunchedEffect(googleMapInstance, isTemperatureLayerEnabled, temperatureRadarUrl) {
-            googleMapInstance?.let { map ->
-                RadarOverlayHelper.showTemperatureOverlay(
-                    map = map,
-                    context = context,
-                    url = temperatureRadarUrl,
-                    showLayer = isTemperatureLayerEnabled
-                )
-            }
-        }
-
         // Loading indicator
         if (isLoading) {
             Box(
@@ -636,9 +583,6 @@ fun LayerToggle(
         )
     }
 }
-
-
-// No longer needed since we're using RadarOverlayManager directly
 
 // Preview
 @Preview(showBackground = true, widthDp = 360)
