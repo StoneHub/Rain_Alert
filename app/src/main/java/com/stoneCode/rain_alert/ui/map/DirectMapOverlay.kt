@@ -91,6 +91,13 @@ private suspend fun loadBitmapFromUrl(urlString: String): Bitmap? {
             connection.readTimeout = 30000     // 30-second read timeout
             connection.connect()
             
+            // Check the response code
+            val responseCode = connection.responseCode
+            if (responseCode != HttpURLConnection.HTTP_OK) {
+                android.util.Log.e("WeatherOverlay", "HTTP error when loading bitmap: $responseCode ${connection.responseMessage}")
+                return@withContext null
+            }
+            
             val input: InputStream = connection.inputStream
             val bitmap = BitmapFactory.decodeStream(input)
             android.util.Log.d("WeatherOverlay", "Bitmap loaded successfully: ${bitmap != null}")

@@ -62,6 +62,7 @@ import com.stoneCode.rain_alert.api.WeatherStation
 import com.stoneCode.rain_alert.repository.RadarMapRepository
 import com.stoneCode.rain_alert.ui.map.WeatherOverlay
 import com.stoneCode.rain_alert.viewmodel.RadarMapViewModel
+import kotlinx.coroutines.launch
 
 /** A component that displays a radar map with weather data overlays.
  *
@@ -118,6 +119,17 @@ fun RadarMapComponent(
     // IMPORTANT: Remember the camera position state to prevent reset on recomposition
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(initialCenter, if (fullScreen) 12f else 9f)
+    }
+    
+    // Force recenter to myLocation when explicitly requested
+    LaunchedEffect(myLocation) {
+        if (myLocation != null && !initialized.value) {
+            // Initial center on myLocation
+            cameraPositionState.position = CameraPosition.fromLatLngZoom(myLocation, 12f)
+            radarMapViewModel.updateMapCenter(myLocation)
+            radarMapViewModel.updateMapZoom(12f)
+            initialized.value = true
+        }
     }
     
     // Initialize with auto-fit zoom based on selected stations, if available
@@ -243,6 +255,7 @@ fun RadarMapComponent(
                     transparency = 0.3f,  // 70% opacity
                     zIndex = 2f           // Above other weather layers
                 )
+                android.util.Log.d("RadarMapComponent", "Showing temperature overlay: $temperatureRadarUrl")
             }
             
             // Add triangular area between stations if enabled and enough stations
@@ -280,6 +293,8 @@ fun RadarMapComponent(
             }
             
             // Always show user location marker on top of everything if available
+            // The blue dot from isMyLocationEnabled isn't always visible enough,
+            // so we add a custom marker for better visibility
             if (myLocation != null) {
                 Marker(
                     state = MarkerState(position = myLocation),
@@ -331,9 +346,28 @@ fun RadarMapComponent(
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // My location button
+            // My location button - Enhanced to explicitly move camera to location
             IconButton(
-                onClick = onMyLocationClick,
+                onClick = {
+                    onMyLocationClick()
+                    // If myLocation is available, explicitly move camera to it
+                    myLocation?.let { loc ->
+                        // This will trigger the LaunchedEffect to move the camera
+                        radarMapViewModel.updateMapCenter(loc)
+                        radarMapViewModel.updateMapZoom(12f)
+                        
+                        // Launch a coroutine to handle the animation since animate is a suspend function
+                        kotlinx.coroutines.MainScope().launch {
+                            // Animate to my location explicitly
+                            cameraPositionState.animate(
+                                CameraUpdateFactory.newCameraPosition(
+                                    CameraPosition(loc, 12f, 0f, 0f)
+                                ),
+                                durationMs = 1000
+                            )
+                        }
+                    }
+                },
                 modifier = Modifier
                     .size(40.dp)
                     .background(

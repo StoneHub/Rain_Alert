@@ -37,8 +37,8 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
     private val _windRadarUrl = MutableLiveData<String>()
     val windRadarUrl: LiveData<String> = _windRadarUrl
     
-    // Temperature layer
-    private val _showTemperatureLayer = MutableLiveData<Boolean>(false)
+    // Temperature layer - enabled by default
+    private val _showTemperatureLayer = MutableLiveData<Boolean>(true)
     val showTemperatureLayer: LiveData<Boolean> = _showTemperatureLayer
     
     private val _temperatureRadarUrl = MutableLiveData<String>()
@@ -99,6 +99,9 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
                         }
                     }
                 )
+                
+                // Also fetch temperature data to have it ready
+                fetchTemperatureData()
             } catch (e: Exception) {
                 _errorMessage.value = "Error loading radar data: ${e.message}"
             } finally {
@@ -152,31 +155,35 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
     
     /**
      * Fetch temperature radar data
+     * This function is now public and can be called directly or via toggleTemperatureLayer()
      */
-    private fun fetchTemperatureData() {
+    fun fetchTemperatureData() {
         viewModelScope.launch {
-            _isLoading.value = true
+            // Don't set loading to true here if we're just pre-loading the data
+            // _isLoading.value = true
             try {
-                // For simplicity, we'll use a hardcoded bbox for the continental US
-                // A more advanced implementation would calculate this based on the view bounds
-                val temperatureUrl = "https://digital.weather.gov/ndfd.conus/wms?" +
-                    "SERVICE=WMS" +
-                    "&VERSION=1.3.0" +
-                    "&REQUEST=GetMap" +
-                    "&LAYERS=ndfd.conus.temp" +  // Temperature layer
-                    "&FORMAT=image/png" +
-                    "&TRANSPARENT=TRUE" +
-                    "&CRS=EPSG:3857" +
-                    "&WIDTH=1000" +
-                    "&HEIGHT=600" +
-                    "&BBOX=-14200679.12,2500000,-7400000,6505689.94" +
-                    "&VTIT=" + getCurrentFormattedTime()
+                // Get temperature data from the repository instead of hardcoding it here
+                // This ensures we use the same bbox and parameters as other layers
+                val center = _mapCenter.value ?: LatLng(40.0, -98.0)
                 
-                _temperatureRadarUrl.value = temperatureUrl
+                // Use the repository method for consistent handling
+                radarMapRepository.getTemperatureRadarUrl(center).fold(
+                    onSuccess = { url ->
+                        _temperatureRadarUrl.value = url
+                        android.util.Log.d("RadarMapViewModel", "Loading temperature bitmap from URL: $url")
+                    },
+                    onFailure = { error ->
+                        android.util.Log.e("RadarMapViewModel", "Error fetching temperature data: ${error.message}")
+                        // Don't set error message if we're just preloading
+                    }
+                )
             } catch (e: Exception) {
-                _errorMessage.value = "Error loading temperature data: ${e.message}"
+                android.util.Log.e("RadarMapViewModel", "Error loading temperature data", e)
+                // Don't set error message here if we're just pre-loading the data
+                // _errorMessage.value = "Error loading temperature data: ${e.message}"
             } finally {
-                _isLoading.value = false
+                // Don't set loading to false here if we're just pre-loading the data
+                // _isLoading.value = false
             }
         }
     }
@@ -189,11 +196,4 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
         val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:00", java.util.Locale.US)
         return dateFormat.format(calendar.time)
     }
-    
-//    /**
-//     * Get the application context
-//     */
-//    fun getApplication(): Application {
-//        return getApplication<Application>()
-//    }
 }

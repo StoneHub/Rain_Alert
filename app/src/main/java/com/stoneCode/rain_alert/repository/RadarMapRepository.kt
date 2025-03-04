@@ -102,6 +102,58 @@ class RadarMapRepository(private val context: Context) {
     }
     
     /**
+     * Get temperature radar tile URL for a specific area
+     */
+    suspend fun getTemperatureRadarUrl(center: LatLng): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            // Use the NWS WMS service for temperature data
+            // The temperature endpoint uses a slightly different URL structure
+            
+            // Format the current date for the VTIT parameter
+            val calendar = java.util.Calendar.getInstance()
+            val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'00:00", java.util.Locale.US)
+            val validTime = dateFormat.format(calendar.time)
+            
+            // Create temperature-specific URL using the working format
+            val temperatureUrl = "https://digital.weather.gov/ndfd/wms?" +
+                "LAYERS=ndfd.conus.maxt" +
+                "&FORMAT=image/png" +
+                "&TRANSPARENT=TRUE" +
+                "&SEASON=0" +
+                "&VERSION=1.3.0" +
+                "&VTIT=$validTime" +
+                "&EXCEPTIONS=INIMAGE" +
+                "&SERVICE=WMS" +
+                "&REQUEST=GetMap" +
+                "&STYLES=" +
+                "&CRS=EPSG:3857" +
+                "&WIDTH=1000" +
+                "&HEIGHT=600" +
+                "&BBOX=-14200679.12,2500000,-7400000,6505689.94"
+            
+            Log.d("RadarMapRepository", "Generated Temperature WMS URL: $temperatureUrl")
+            
+            // Verify the URL works by making a request
+            val request = Request.Builder()
+                .url(temperatureUrl)
+                .header("User-Agent", "${AppConfig.USER_AGENT} (${AppConfig.CONTACT_EMAIL})")
+                .build()
+            
+            val response = okHttpClient.newCall(request).execute()
+            
+            if (!response.isSuccessful) {
+                Log.e("RadarMapRepository", "Failed to verify temperature URL: ${response.code}")
+                return@withContext Result.failure(Exception("Failed to get temperature data: ${response.code} - ${response.message}"))
+            }
+            
+            Result.success(temperatureUrl)
+        } catch (e: Exception) {
+            Log.e("RadarMapRepository", "Error fetching temperature data", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
      * Generate a WMS URL for the specified layer and parameters
      */
     private fun createWmsUrl(
