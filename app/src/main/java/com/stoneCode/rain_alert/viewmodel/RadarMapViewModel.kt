@@ -245,6 +245,7 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
         
         // Set the animation layer
         _forecastAnimationLayer.value = layer
+        Log.d("RadarMapViewModel", "Initializing forecast animation with layer: $layer")
         
         // Generate time steps asynchronously
         viewModelScope.launch {
@@ -252,7 +253,6 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
             try {
                 // Generate time steps
                 val timeSteps = forecastTimelineManager.generateTimeSteps(
-                    layer = layer,
                     hoursInPast = hoursInPast,
                     hoursInFuture = hoursInFuture,
                     intervalHours = intervalHours
@@ -392,6 +392,8 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
      * Change the animation layer
      */
     fun changeAnimationLayer(layer: String) {
+        Log.d("RadarMapViewModel", "Changing animation layer to: $layer")
+        
         if (_forecastAnimationLayer.value == layer) return
         
         // Stop the animation and reinitialize with the new layer

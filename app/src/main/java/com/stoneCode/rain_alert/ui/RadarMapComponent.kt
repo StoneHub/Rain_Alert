@@ -1,8 +1,11 @@
 package com.stoneCode.rain_alert.ui
 
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +17,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fullscreen
@@ -38,14 +43,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -65,27 +69,17 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import com.stoneCode.rain_alert.api.WeatherStation
 import com.stoneCode.rain_alert.repository.RadarMapRepository
 import com.stoneCode.rain_alert.ui.map.ForecastMapScrubber
+import com.stoneCode.rain_alert.ui.map.ForecastTimelineManager
 import com.stoneCode.rain_alert.ui.map.HorizontalForecastScrubber
 import com.stoneCode.rain_alert.ui.map.WeatherOverlay
 import com.stoneCode.rain_alert.viewmodel.RadarMapViewModel
 import kotlinx.coroutines.launch
 
-/** A component that displays a radar map with weather data overlays.
- *
- * Added modifications:
- * - Accepts an optional myLocation parameter to center the map on your location.
- * - Shows a marker for your current location.
- * - Maintains the camera position by using myLocation (if provided) as the default center.
- * - Long-click (via a simple onClick, since long click isn't directly supported) on station markers
- *   will show a dialog with station information.
- * - Preserves camera position when component recomposes
- * - Properly aligned radar imagery overlays via direct Compose overlay approach
- */
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun RadarMapComponent(
     modifier: Modifier = Modifier,
-    centerLatLng: LatLng = LatLng(40.0, -98.0), // Default to center of US
+    centerLatLng: LatLng = LatLng(40.0, -98.0),
     myLocation: LatLng? = null,
     selectedStations: List<WeatherStation> = emptyList(),
     isLoading: Boolean = false,
@@ -96,152 +90,114 @@ fun RadarMapComponent(
     onChangeLocationClick: () -> Unit = {},
     radarMapViewModel: RadarMapViewModel = viewModel()
 ) {
-    // State for showing station info dialog when marker is clicked.
+    val coroutineScope = rememberCoroutineScope()
+
     var selectedStation by remember { mutableStateOf<WeatherStation?>(null) }
 
-    // Layer visibility controls
+    // Refs to user toggles
     var showControls by remember { mutableStateOf(false) }
     var showPrecipitationLayer by remember { mutableStateOf(true) }
     var showWindLayer by remember { mutableStateOf(false) }
     var showStationsLayer by remember { mutableStateOf(true) }
     var showTriangleLayer by remember { mutableStateOf(selectedStations.size >= 3) }
-    
-    // Animation controls
+
+    // Forecast animation settings
     val forecastTimeSteps by radarMapViewModel.forecastTimeSteps.observeAsState(emptyList())
     val currentTimeIndex by radarMapViewModel.currentTimeIndex.observeAsState(0)
     val isAnimationPlaying by radarMapViewModel.isAnimationPlaying.observeAsState(false)
     val forecastAnimationEnabled by radarMapViewModel.forecastAnimationEnabled.observeAsState(false)
     val currentAnimationRadarUrl by radarMapViewModel.currentAnimationRadarUrl.observeAsState()
+    val forecastAnimationLayer by radarMapViewModel.forecastAnimationLayer.observeAsState(ForecastTimelineManager.LAYER_PRECIPITATION)
 
-    // Get radar data from view model
     val precipitationRadarUrl by radarMapViewModel.precipitationRadarUrl.observeAsState()
     val windRadarUrl by radarMapViewModel.windRadarUrl.observeAsState()
     val temperatureRadarUrl by radarMapViewModel.temperatureRadarUrl.observeAsState()
     val isRadarLoading by radarMapViewModel.isLoading.observeAsState(false)
-    val errorMessage by radarMapViewModel.errorMessage.observeAsState()
     val isTemperatureLayerEnabled by radarMapViewModel.showTemperatureLayer.observeAsState(false)
 
-    // Get repository instance for calculations
     val radarMapRepository = remember { RadarMapRepository(radarMapViewModel.getApplication()) }
 
-    // Use myLocation as default center if available
-    val initialCenter = myLocation ?: centerLatLng
-
-    // Key to track if we've initialized the map position (prevents jumps on recomposition)
+    // Map camera state
     val initialized = remember { mutableStateOf(false) }
-    
-    // IMPORTANT: Remember the camera position state to prevent reset on recomposition
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(initialCenter, if (fullScreen) 12f else 9f)
+        position = CameraPosition.fromLatLngZoom(myLocation ?: centerLatLng, if (fullScreen) 12f else 9f)
     }
-    
-    // Force recenter to myLocation when explicitly requested
+
+    // Center on user location only once initially, if available
     LaunchedEffect(myLocation) {
-        if (myLocation != null && !initialized.value) {
-            // Initial center on myLocation
+        if (!initialized.value && myLocation != null) {
             cameraPositionState.position = CameraPosition.fromLatLngZoom(myLocation, 12f)
             radarMapViewModel.updateMapCenter(myLocation)
             radarMapViewModel.updateMapZoom(12f)
             initialized.value = true
         }
     }
-    
-    // Initialize with auto-fit zoom based on selected stations, if available
+
+    // If we still haven't initialized and we have stations
     LaunchedEffect(selectedStations, myLocation) {
         if (!initialized.value) {
             if (selectedStations.isNotEmpty()) {
                 val (center, zoom) = radarMapRepository.calculateMapViewForStations(selectedStations)
                 radarMapViewModel.updateMapCenter(center)
                 radarMapViewModel.updateMapZoom(zoom)
-                // Update camera position
                 cameraPositionState.position = CameraPosition.fromLatLngZoom(center, zoom)
             } else if (myLocation != null) {
                 radarMapViewModel.updateMapCenter(myLocation)
-                // Set a default zoom for your location
                 radarMapViewModel.updateMapZoom(12f)
-                // Update camera position
                 cameraPositionState.position = CameraPosition.fromLatLngZoom(myLocation, 12f)
+            } else {
+                // Use fallback centerLatLng if nothing else
+                radarMapViewModel.updateMapCenter(centerLatLng)
+                radarMapViewModel.updateMapZoom(if (fullScreen) 12f else 9f)
+                cameraPositionState.position = CameraPosition.fromLatLngZoom(
+                    centerLatLng,
+                    if (fullScreen) 12f else 9f
+                )
             }
             initialized.value = true
         }
     }
 
-    // Get map data from view model
-    val mapCenter by radarMapViewModel.mapCenter.observeAsState(initialCenter)
-    val mapZoom by radarMapViewModel.mapZoom.observeAsState(if (fullScreen) 12f else 9f)
-    
-    // Update the view model with the latest camera position when it changes
-    // This ensures we remember where the user panned/zoomed
-    LaunchedEffect(cameraPositionState.position) {
-        if (initialized.value && !cameraPositionState.isMoving) {
-            radarMapViewModel.updateMapCenter(cameraPositionState.position.target)
-            radarMapViewModel.updateMapZoom(cameraPositionState.position.zoom)
+    // Listen for changes to the camera; update the ViewModel only if user has finished moving
+    // so it doesn't keep forcing new center on every tiny drag
+    LaunchedEffect(cameraPositionState.isMoving) {
+        if (!cameraPositionState.isMoving && initialized.value) {
+            val currentPos = cameraPositionState.position
+            radarMapViewModel.updateMapCenter(currentPos.target)
+            radarMapViewModel.updateMapZoom(currentPos.zoom)
         }
     }
 
-    // Animate camera position if the map center or zoom is explicitly changed
-    // (e.g., when clicking on location button)
-    LaunchedEffect(mapCenter, mapZoom) {
-        if (initialized.value) {
-            val currentTarget = cameraPositionState.position.target
-            val currentZoom = cameraPositionState.position.zoom
-            
-            // Only animate if there's an actual change to avoid loops
-            if (currentTarget != mapCenter || currentZoom != mapZoom) {
-                cameraPositionState.animate(
-                    CameraUpdateFactory.newCameraPosition(
-                        CameraPosition(mapCenter, mapZoom, 0f, 0f)
-                    ),
-                    durationMs = 1000
-                )
-            }
-        }
-    }
-
-    // Fetch radar data if needed
+    // One-time fetch when we have a valid center
+    val mapCenter by radarMapViewModel.mapCenter.observeAsState(centerLatLng)
     LaunchedEffect(mapCenter) {
-        radarMapViewModel.fetchRadarData(mapCenter)
-    }
-
-    // Get context
-    val context = LocalContext.current
-    
-    // Flag for when map is loaded and ready
-    var mapReady by remember { mutableStateOf(false) }
-    
-    // Remember the current location to ensure it's always visible
-    val currentLocation = remember(myLocation) { myLocation }
-    
-    // Log location information
-    LaunchedEffect(myLocation) {
-        if (myLocation != null) {
-            android.util.Log.d("RadarMapComponent", "Location available: $myLocation")
-        } else {
-            android.util.Log.d("RadarMapComponent", "No location data available")
+        if (initialized.value) {
+            // Pull new radar data for that center
+            radarMapViewModel.fetchRadarData(mapCenter)
         }
     }
-    
+
+    // Map composable
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(if (fullScreen) 500.dp else 200.dp)
-            .clip(shape = RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(12.dp))
     ) {
-        // Google Map with all elements including weather overlays
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
             properties = MapProperties(
-                isMyLocationEnabled = currentLocation != null,
-                mapType = MapType.TERRAIN,  // Use terrain type to see mountains and terrain details
-                isBuildingEnabled = false,  // Disable 3D buildings for cleaner view
-                isIndoorEnabled = false,    // Disable indoor maps for cleaner view
-                isTrafficEnabled = false    // Disable traffic for cleaner view
+                isMyLocationEnabled = (myLocation != null),
+                mapType = MapType.TERRAIN,
+                isBuildingEnabled = false,
+                isIndoorEnabled = false,
+                isTrafficEnabled = false
             ),
             uiSettings = MapUiSettings(
                 zoomControlsEnabled = false,
                 mapToolbarEnabled = false,
-                myLocationButtonEnabled = false, // We'll use our own button
+                myLocationButtonEnabled = false,
                 compassEnabled = fullScreen,
                 rotationGesturesEnabled = true,
                 scrollGesturesEnabled = true,
@@ -249,59 +205,62 @@ fun RadarMapComponent(
                 zoomGesturesEnabled = true
             ),
             onMapLoaded = {
-                android.util.Log.d("RadarMapComponent", "Map loaded and ready for overlays")
-                mapReady = true
+                Log.d("RadarMapComponent", "Map loaded and ready")
             }
         ) {
-            // Add weather overlays if layer is enabled
-            // Note: These are added as children of the GoogleMap composable which makes them visible
-            
+            // If forecast animation is on AND we have a current frame:
             if (forecastAnimationEnabled && currentAnimationRadarUrl != null) {
-                // Animation mode - show the current animation frame
+                // Show the animated layer
                 WeatherOverlay(
                     imageUrl = currentAnimationRadarUrl,
                     visible = true,
-                    transparency = 0.3f,  // 70% opacity
-                    zIndex = 0f           // Below other layers
+                    transparency = 0.3f,
+                    zIndex = 0f    // base z-index for animation layer
                 )
-                android.util.Log.d("RadarMapComponent", "Showing animation frame: $currentAnimationRadarUrl")
-            } else {
-                // Standard mode - show the selected layers
                 
-                // Precipitation overlay
+                // Log which layer we're currently animating
+                android.util.Log.d("RadarMapComponent", "Showing animation frame for layer: $forecastAnimationLayer URL: $currentAnimationRadarUrl")
+                
+                // Only show temperature additionally if it's not being animated
+                if (isTemperatureLayerEnabled && 
+                    forecastAnimationLayer != ForecastTimelineManager.LAYER_TEMPERATURE && 
+                    temperatureRadarUrl != null) {
+                    WeatherOverlay(
+                        imageUrl = temperatureRadarUrl,
+                        visible = true,
+                        transparency = 0.3f,
+                        zIndex = 2f
+                    )
+                }
+            } else {
+                // Standard mode (no animation)
                 if (showPrecipitationLayer && precipitationRadarUrl != null) {
                     WeatherOverlay(
                         imageUrl = precipitationRadarUrl,
                         visible = true,
-                        transparency = 0.3f,  // 70% opacity
-                        zIndex = 0f           // Below other layers
+                        transparency = 0.3f,
+                        zIndex = 0f
                     )
                 }
-                
-                // Wind overlay
                 if (showWindLayer && windRadarUrl != null) {
                     WeatherOverlay(
                         imageUrl = windRadarUrl,
                         visible = true,
-                        transparency = 0.4f,  // 60% opacity
-                        zIndex = 1f           // Above precipitation
+                        transparency = 0.4f,
+                        zIndex = 1f
                     )
                 }
-                
-                // Temperature overlay
                 if (isTemperatureLayerEnabled && temperatureRadarUrl != null) {
                     WeatherOverlay(
                         imageUrl = temperatureRadarUrl,
                         visible = true,
-                        transparency = 0.3f,  // 70% opacity
-                        zIndex = 2f           // Above other weather layers
+                        transparency = 0.3f,
+                        zIndex = 2f
                     )
-                    android.util.Log.d("RadarMapComponent", "Showing temperature overlay: $temperatureRadarUrl")
                 }
             }
-            
-            // Add triangular area between stations if enabled and enough stations
-            // This goes between the overlays and markers
+
+            // Triangular area
             if (showTriangleLayer && selectedStations.size >= 3) {
                 val stationPositions = selectedStations.take(3).map {
                     LatLng(it.latitude, it.longitude)
@@ -311,57 +270,48 @@ fun RadarMapComponent(
                     fillColor = Color.Blue.copy(alpha = 0.2f),
                     strokeColor = Color.Blue.copy(alpha = 0.5f),
                     strokeWidth = 2f,
-                    zIndex = 1f // Above radar overlays but below markers
+                    zIndex = 3f
                 )
             }
-            
-            // Add station markers if layer is enabled
+
+            // Station markers
             if (showStationsLayer) {
                 selectedStations.forEach { station ->
                     val position = LatLng(station.latitude, station.longitude)
                     Marker(
                         state = MarkerState(position = position),
                         title = station.name,
-                        snippet = "Distance: ${String.format("%.1f", station.distance)} km",
+                        snippet = "Distance: ${String.format(java.util.Locale.US, "%.1f", station.distance)} km",
                         icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED),
-                        zIndex = 2.0f, // Above overlays and triangles
+                        zIndex = 4f,  // above polygons
                         onClick = {
-                            // Simulate a long click by showing a dialog with station info
                             selectedStation = station
                             true
                         }
                     )
                 }
             }
-            
-            // Always show user location marker on top of everything if available
-            // Ensure myLocation is always displayed with high visibility
-            currentLocation?.let { userLocation ->
-                // Custom marker for better visibility - always shown
+
+            // Finally, show myLocation marker on top with a large z-index
+            myLocation?.let { userLocation ->
                 Marker(
-                    state = MarkerState(position = userLocation),
+                    state = MarkerState(userLocation),
                     title = "You are here",
                     icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE),
-                    zIndex = 5.0f  // Highest z-index to always be on top
+                    zIndex = 999f // always on top
                 )
-                
-                // Add a circle around the location for better visibility
                 Circle(
                     center = userLocation,
-                    radius = 500.0, // 500 meters radius
+                    radius = 500.0,
                     fillColor = Color.Blue.copy(alpha = 0.15f),
-                    strokeColor = Color.Blue.copy(alpha = 0.8f),
+                    strokeColor = Color.Blue.copy(alpha = 0.9f),
                     strokeWidth = 2f,
-                    zIndex = 4.0f
+                    zIndex = 998f // just under the marker
                 )
-                
-                android.util.Log.d("RadarMapComponent", "Displaying location marker at: $userLocation")
-            } ?: run {
-                android.util.Log.d("RadarMapComponent", "No location available to display marker")
             }
         }
-        
-        // Loading indicator
+
+        // Loading overlay
         if (isLoading) {
             Box(
                 modifier = Modifier
@@ -369,14 +319,11 @@ fun RadarMapComponent(
                     .background(Color.Black.copy(alpha = 0.3f)),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(
-                    color = MaterialTheme.colorScheme.primary
-                )
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
         }
 
-        // Main map controls for full screen, location, and my location
-        // Full screen button (top left)
+        // Top-left: fullscreen toggle
         IconButton(
             onClick = onToggleFullScreen,
             modifier = Modifier
@@ -395,31 +342,24 @@ fun RadarMapComponent(
             )
         }
 
-        // Location buttons (top right)
+        // Top-right: location controls
         Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // My location button - Enhanced to explicitly move camera to location
             IconButton(
                 onClick = {
                     onMyLocationClick()
-                    // If myLocation is available, explicitly move camera to it
                     myLocation?.let { loc ->
-                        // This will trigger the LaunchedEffect to move the camera
                         radarMapViewModel.updateMapCenter(loc)
                         radarMapViewModel.updateMapZoom(12f)
-                        
-                        // Launch a coroutine to handle the animation since animate is a suspend function
-                        kotlinx.coroutines.MainScope().launch {
-                            // Animate to my location explicitly
+                        // Use the coroutineScope defined above to animate the camera
+                        coroutineScope.launch {
                             cameraPositionState.animate(
-                                CameraUpdateFactory.newCameraPosition(
-                                    CameraPosition(loc, 12f, 0f, 0f)
-                                ),
-                                durationMs = 1000
+                                CameraUpdateFactory.newCameraPosition(CameraPosition(loc, 12f, 0f, 0f)),
+                                1000
                             )
                         }
                     }
@@ -438,7 +378,6 @@ fun RadarMapComponent(
                 )
             }
 
-            // Manual location button
             IconButton(
                 onClick = onChangeLocationClick,
                 modifier = Modifier
@@ -456,48 +395,7 @@ fun RadarMapComponent(
             }
         }
 
-        // Layer controls (conditionally visible)
-        if (showControls) {
-            MapControls(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 8.dp, bottom = 56.dp),
-                isFullScreen = fullScreen,
-                onToggleFullScreen = onToggleFullScreen,
-                onRefresh = onRefresh,
-                showPrecipitation = showPrecipitationLayer,
-                onTogglePrecipitation = { showPrecipitationLayer = !showPrecipitationLayer },
-                showWind = showWindLayer,
-                onToggleWind = { showWindLayer = !showWindLayer },
-                showTemperature = isTemperatureLayerEnabled,
-                onToggleTemperature = { radarMapViewModel.toggleTemperatureLayer() },
-                showStations = showStationsLayer,
-                onToggleStations = { showStationsLayer = !showStationsLayer },
-                showTriangle = showTriangleLayer,
-                onToggleTriangle = { showTriangleLayer = !showTriangleLayer },
-                triangleEnabled = selectedStations.size >= 3,
-                forecastAnimationEnabled = forecastAnimationEnabled,
-                onToggleForecastAnimation = { radarMapViewModel.toggleForecastAnimation() }
-            )
-        }
-        
-        // Forecast timeline scrubber (only visible in animation mode)
-        if (forecastAnimationEnabled && forecastTimeSteps.isNotEmpty() && !isRadarLoading) {
-            // Use horizontal scrubber in both modes - better for timeline visualization
-            HorizontalForecastScrubber(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(bottom = if (fullScreen) 0.dp else 8.dp),
-                timeSteps = forecastTimeSteps,
-                currentTimeIndex = currentTimeIndex,
-                onTimeStepSelected = { radarMapViewModel.updateCurrentTimeIndex(it) },
-                isPlaying = isAnimationPlaying,
-                onPlayPauseToggled = { radarMapViewModel.toggleAnimation() }
-            )
-        }
-
-        // Toggle for controls visibility
+        // Bottom-end: show/hide layer controls
         IconButton(
             onClick = { showControls = !showControls },
             modifier = Modifier
@@ -515,16 +413,56 @@ fun RadarMapComponent(
                 tint = MaterialTheme.colorScheme.onSurface
             )
         }
+
+        // If controls are visible, show them
+        if (showControls) {
+            MapControls(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 8.dp, bottom = 56.dp),
+                onRefresh = onRefresh,
+                showPrecipitation = showPrecipitationLayer,
+                onTogglePrecipitation = { showPrecipitationLayer = !showPrecipitationLayer },
+                showWind = showWindLayer,
+                onToggleWind = { showWindLayer = !showWindLayer },
+                showTemperature = isTemperatureLayerEnabled,
+                onToggleTemperature = { radarMapViewModel.toggleTemperatureLayer() },
+                showStations = showStationsLayer,
+                onToggleStations = { showStationsLayer = !showStationsLayer },
+                showTriangle = showTriangleLayer,
+                onToggleTriangle = { showTriangleLayer = !showTriangleLayer },
+                triangleEnabled = selectedStations.size >= 3,
+                forecastAnimationEnabled = forecastAnimationEnabled,
+                onToggleForecastAnimation = { radarMapViewModel.toggleForecastAnimation() },
+                currentAnimationLayer = forecastAnimationLayer,
+                onChangeAnimationLayer = { newLayer -> radarMapViewModel.changeAnimationLayer(newLayer) }
+            )
+        }
+
+        // Forecast scrubber along bottom if animation is on
+        if (forecastAnimationEnabled && forecastTimeSteps.isNotEmpty() && !isRadarLoading) {
+            HorizontalForecastScrubber(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(bottom = if (fullScreen) 0.dp else 8.dp),
+                timeSteps = forecastTimeSteps,
+                currentTimeIndex = currentTimeIndex,
+                onTimeStepSelected = { radarMapViewModel.updateCurrentTimeIndex(it) },
+                isPlaying = isAnimationPlaying,
+                onPlayPauseToggled = { radarMapViewModel.toggleAnimation() }
+            )
+        }
     }
 
-    // Dialog for displaying station info when marker is clicked
+    // Dialog for station info
     if (selectedStation != null) {
         Dialog(onDismissRequest = { selectedStation = null }) {
             Card(
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 modifier = Modifier
-                    .fillMaxWidth(if (fullScreen) 0.7f else 0.9f) // Adjust width based on screen mode
+                    .fillMaxWidth(if (fullScreen) 0.7f else 0.9f)
                     .padding(16.dp)
             ) {
                 Column(
@@ -537,23 +475,15 @@ fun RadarMapComponent(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Distance: ${String.format("%.1f", selectedStation!!.distance)} km",
+                        text = "Distance: ${String.format(java.util.Locale.US, "%.1f", selectedStation!!.distance)} km",
                         style = MaterialTheme.typography.bodyMedium
                     )
-                    
-                    // Additional info about the station (if available)
-                    selectedStation!!.stationUrl?.let { url ->
+                    selectedStation?.stationUrl?.let { url ->
                         if (url.isNotEmpty()) {
-                            Text(
-                                text = "Station URL: $url",
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                            Text("Station URL: $url", style = MaterialTheme.typography.bodySmall)
                         }
                     }
-                    
                     Spacer(modifier = Modifier.height(8.dp))
-                    
-                    // Close button
                     Button(
                         onClick = { selectedStation = null },
                         modifier = Modifier.align(Alignment.End)
@@ -566,11 +496,12 @@ fun RadarMapComponent(
     }
 }
 
+/**
+ * A small card with toggles for map layers, plus refresh.
+ */
 @Composable
 fun MapControls(
     modifier: Modifier = Modifier,
-    isFullScreen: Boolean = false,
-    onToggleFullScreen: () -> Unit = {},
     onRefresh: () -> Unit = {},
     showPrecipitation: Boolean = true,
     onTogglePrecipitation: () -> Unit = {},
@@ -584,88 +515,66 @@ fun MapControls(
     onToggleTriangle: () -> Unit = {},
     triangleEnabled: Boolean = false,
     forecastAnimationEnabled: Boolean = false,
-    onToggleForecastAnimation: () -> Unit = {}
+    onToggleForecastAnimation: () -> Unit = {},
+    currentAnimationLayer: String = ForecastTimelineManager.LAYER_PRECIPITATION,
+    onChangeAnimationLayer: (String) -> Unit = {}
 ) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
-            horizontalAlignment = Alignment.Start,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Refresh control
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.End
             ) {
-                IconButton(
-                    onClick = onRefresh,
-                    modifier = Modifier.size(32.dp)
-                ) {
+                IconButton(onClick = onRefresh, modifier = Modifier.size(32.dp)) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh Map",
+                        contentDescription = "Refresh",
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
 
-            // Layer toggles
-            Text(
-                text = "Layers",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
+            // Layer toggle controls
+            Text("Layers", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
 
-            // Precipitation layer toggle
-            LayerToggle(
-                label = "Precipitation",
-                checked = showPrecipitation,
-                onCheckedChange = onTogglePrecipitation
-            )
-
-            // Wind layer toggle
-            LayerToggle(
-                label = "Wind",
-                checked = showWind,
-                onCheckedChange = onToggleWind
-            )
+            LayerToggle("Precipitation", showPrecipitation, onTogglePrecipitation)
+            LayerToggle("Wind", showWind, onToggleWind)
+            LayerToggle("Temperature", showTemperature, onToggleTemperature)
+            LayerToggle("Stations", showStations, onToggleStations)
+            LayerToggle("Coverage Area", showTriangle, onToggleTriangle, enabled = triangleEnabled)
+            LayerToggle("Forecast Anim.", forecastAnimationEnabled, onToggleForecastAnimation)
             
-            // Temperature layer toggle
-            LayerToggle(
-                label = "Temperature",
-                checked = showTemperature,
-                onCheckedChange = onToggleTemperature
-            )
-
-            // Stations layer toggle
-            LayerToggle(
-                label = "Stations",
-                checked = showStations,
-                onCheckedChange = onToggleStations
-            )
-
-            // Triangle overlay toggle
-            LayerToggle(
-                label = "Coverage Area",
-                checked = showTriangle,
-                onCheckedChange = onToggleTriangle,
-                enabled = triangleEnabled
-            )
-            
-            // Forecast animation toggle
-            LayerToggle(
-                label = "Forecast Animation",
-                checked = forecastAnimationEnabled,
-                onCheckedChange = onToggleForecastAnimation
-            )
+            // Animation layer selector (only visible when animation is enabled)
+            if (forecastAnimationEnabled) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Animation Layer", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                
+                // Layer selection options with radio buttons
+                AnimationLayerOption(
+                    "Precipitation",
+                    isSelected = currentAnimationLayer == ForecastTimelineManager.LAYER_PRECIPITATION,
+                    onClick = { onChangeAnimationLayer(ForecastTimelineManager.LAYER_PRECIPITATION) }
+                )
+                
+                AnimationLayerOption(
+                    "Wind",
+                    isSelected = currentAnimationLayer == ForecastTimelineManager.LAYER_WIND,
+                    onClick = { onChangeAnimationLayer(ForecastTimelineManager.LAYER_WIND) }
+                )
+                
+                AnimationLayerOption(
+                    "Temperature",
+                    isSelected = currentAnimationLayer == ForecastTimelineManager.LAYER_TEMPERATURE,
+                    onClick = { onChangeAnimationLayer(ForecastTimelineManager.LAYER_TEMPERATURE) }
+                )
+            }
         }
     }
 }
@@ -678,21 +587,17 @@ fun LayerToggle(
     enabled: Boolean = true
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = if (enabled)
-                MaterialTheme.colorScheme.onSurface
-            else
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(
+                alpha = 0.5f
+            ),
             modifier = Modifier.weight(1f)
         )
-
         Switch(
             checked = checked && enabled,
             onCheckedChange = { if (enabled) onCheckedChange() },
@@ -701,57 +606,55 @@ fun LayerToggle(
     }
 }
 
-// Preview
-@RequiresApi(Build.VERSION_CODES.O)
-@Preview(showBackground = true, widthDp = 360)
+/**
+ * Option for animation layer selection with a radio button style
+ */
 @Composable
-fun PreviewRadarMapComponent() {
-    MaterialTheme {
-        val previewStations = listOf(
-            WeatherStation(
-                id = "station1",
-                name = "Station 1",
-                latitude = 40.0,
-                longitude = -98.0,
-                distance = 10.0,
-                stationUrl = ""
-            ),
-            WeatherStation(
-                id = "station2",
-                name = "Station 2",
-                latitude = 40.1,
-                longitude = -98.1,
-                distance = 15.0,
-                stationUrl = ""
-            ),
-            WeatherStation(
-                id = "station3",
-                name = "Station 3",
-                latitude = 40.2,
-                longitude = -97.9,
-                distance = 12.0,
-                stationUrl = ""
-            )
-        )
-
-        Column {
-            RadarMapComponent(
-                selectedStations = previewStations,
-                myLocation = LatLng(40.1, -98.0)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "Loading State:",
-                style = MaterialTheme.typography.titleMedium
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            RadarMapComponent(
-                isLoading = true
-            )
+fun AnimationLayerOption(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Radio button-like circle
+        Box(
+            modifier = Modifier
+                .size(20.dp)
+                .padding(4.dp)
+                .background(Color.Transparent)
+                .border(
+                    width = 2.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = CircleShape
+                        )
+                )
+            }
         }
+        
+        Spacer(modifier = Modifier.width(8.dp))
+        
+        // Label
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
