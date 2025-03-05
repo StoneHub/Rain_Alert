@@ -1,11 +1,14 @@
 package com.stoneCode.rain_alert.ui
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,6 +53,7 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.Circle
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapType
@@ -60,6 +64,8 @@ import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.stoneCode.rain_alert.api.WeatherStation
 import com.stoneCode.rain_alert.repository.RadarMapRepository
+import com.stoneCode.rain_alert.ui.map.ForecastMapScrubber
+import com.stoneCode.rain_alert.ui.map.HorizontalForecastScrubber
 import com.stoneCode.rain_alert.ui.map.WeatherOverlay
 import com.stoneCode.rain_alert.viewmodel.RadarMapViewModel
 import kotlinx.coroutines.launch
@@ -75,6 +81,7 @@ import kotlinx.coroutines.launch
  * - Preserves camera position when component recomposes
  * - Properly aligned radar imagery overlays via direct Compose overlay approach
  */
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun RadarMapComponent(
     modifier: Modifier = Modifier,
@@ -98,6 +105,13 @@ fun RadarMapComponent(
     var showWindLayer by remember { mutableStateOf(false) }
     var showStationsLayer by remember { mutableStateOf(true) }
     var showTriangleLayer by remember { mutableStateOf(selectedStations.size >= 3) }
+    
+    // Animation controls
+    val forecastTimeSteps by radarMapViewModel.forecastTimeSteps.observeAsState(emptyList())
+    val currentTimeIndex by radarMapViewModel.currentTimeIndex.observeAsState(0)
+    val isAnimationPlaying by radarMapViewModel.isAnimationPlaying.observeAsState(false)
+    val forecastAnimationEnabled by radarMapViewModel.forecastAnimationEnabled.observeAsState(false)
+    val currentAnimationRadarUrl by radarMapViewModel.currentAnimationRadarUrl.observeAsState()
 
     // Get radar data from view model
     val precipitationRadarUrl by radarMapViewModel.precipitationRadarUrl.observeAsState()
@@ -195,6 +209,18 @@ fun RadarMapComponent(
     // Flag for when map is loaded and ready
     var mapReady by remember { mutableStateOf(false) }
     
+    // Remember the current location to ensure it's always visible
+    val currentLocation = remember(myLocation) { myLocation }
+    
+    // Log location information
+    LaunchedEffect(myLocation) {
+        if (myLocation != null) {
+            android.util.Log.d("RadarMapComponent", "Location available: $myLocation")
+        } else {
+            android.util.Log.d("RadarMapComponent", "No location data available")
+        }
+    }
+    
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -206,8 +232,11 @@ fun RadarMapComponent(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
             properties = MapProperties(
-                isMyLocationEnabled = myLocation != null,
-                mapType = MapType.TERRAIN  // Use terrain type to see mountains and terrain details
+                isMyLocationEnabled = currentLocation != null,
+                mapType = MapType.TERRAIN,  // Use terrain type to see mountains and terrain details
+                isBuildingEnabled = false,  // Disable 3D buildings for cleaner view
+                isIndoorEnabled = false,    // Disable indoor maps for cleaner view
+                isTrafficEnabled = false    // Disable traffic for cleaner view
             ),
             uiSettings = MapUiSettings(
                 zoomControlsEnabled = false,
@@ -227,35 +256,48 @@ fun RadarMapComponent(
             // Add weather overlays if layer is enabled
             // Note: These are added as children of the GoogleMap composable which makes them visible
             
-            // Precipitation overlay
-            if (showPrecipitationLayer && precipitationRadarUrl != null) {
+            if (forecastAnimationEnabled && currentAnimationRadarUrl != null) {
+                // Animation mode - show the current animation frame
                 WeatherOverlay(
-                    imageUrl = precipitationRadarUrl,
+                    imageUrl = currentAnimationRadarUrl,
                     visible = true,
                     transparency = 0.3f,  // 70% opacity
                     zIndex = 0f           // Below other layers
                 )
-            }
-            
-            // Wind overlay
-            if (showWindLayer && windRadarUrl != null) {
-                WeatherOverlay(
-                    imageUrl = windRadarUrl,
-                    visible = true,
-                    transparency = 0.4f,  // 60% opacity
-                    zIndex = 1f           // Above precipitation
-                )
-            }
-            
-            // Temperature overlay
-            if (isTemperatureLayerEnabled && temperatureRadarUrl != null) {
-                WeatherOverlay(
-                    imageUrl = temperatureRadarUrl,
-                    visible = true,
-                    transparency = 0.3f,  // 70% opacity
-                    zIndex = 2f           // Above other weather layers
-                )
-                android.util.Log.d("RadarMapComponent", "Showing temperature overlay: $temperatureRadarUrl")
+                android.util.Log.d("RadarMapComponent", "Showing animation frame: $currentAnimationRadarUrl")
+            } else {
+                // Standard mode - show the selected layers
+                
+                // Precipitation overlay
+                if (showPrecipitationLayer && precipitationRadarUrl != null) {
+                    WeatherOverlay(
+                        imageUrl = precipitationRadarUrl,
+                        visible = true,
+                        transparency = 0.3f,  // 70% opacity
+                        zIndex = 0f           // Below other layers
+                    )
+                }
+                
+                // Wind overlay
+                if (showWindLayer && windRadarUrl != null) {
+                    WeatherOverlay(
+                        imageUrl = windRadarUrl,
+                        visible = true,
+                        transparency = 0.4f,  // 60% opacity
+                        zIndex = 1f           // Above precipitation
+                    )
+                }
+                
+                // Temperature overlay
+                if (isTemperatureLayerEnabled && temperatureRadarUrl != null) {
+                    WeatherOverlay(
+                        imageUrl = temperatureRadarUrl,
+                        visible = true,
+                        transparency = 0.3f,  // 70% opacity
+                        zIndex = 2f           // Above other weather layers
+                    )
+                    android.util.Log.d("RadarMapComponent", "Showing temperature overlay: $temperatureRadarUrl")
+                }
             }
             
             // Add triangular area between stations if enabled and enough stations
@@ -293,15 +335,29 @@ fun RadarMapComponent(
             }
             
             // Always show user location marker on top of everything if available
-            // The blue dot from isMyLocationEnabled isn't always visible enough,
-            // so we add a custom marker for better visibility
-            if (myLocation != null) {
+            // Ensure myLocation is always displayed with high visibility
+            currentLocation?.let { userLocation ->
+                // Custom marker for better visibility - always shown
                 Marker(
-                    state = MarkerState(position = myLocation),
+                    state = MarkerState(position = userLocation),
                     title = "You are here",
                     icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE),
-                    zIndex = 3.0f  // Highest z-index to always be on top
+                    zIndex = 5.0f  // Highest z-index to always be on top
                 )
+                
+                // Add a circle around the location for better visibility
+                Circle(
+                    center = userLocation,
+                    radius = 500.0, // 500 meters radius
+                    fillColor = Color.Blue.copy(alpha = 0.15f),
+                    strokeColor = Color.Blue.copy(alpha = 0.8f),
+                    strokeWidth = 2f,
+                    zIndex = 4.0f
+                )
+                
+                android.util.Log.d("RadarMapComponent", "Displaying location marker at: $userLocation")
+            } ?: run {
+                android.util.Log.d("RadarMapComponent", "No location available to display marker")
             }
         }
         
@@ -419,7 +475,25 @@ fun RadarMapComponent(
                 onToggleStations = { showStationsLayer = !showStationsLayer },
                 showTriangle = showTriangleLayer,
                 onToggleTriangle = { showTriangleLayer = !showTriangleLayer },
-                triangleEnabled = selectedStations.size >= 3
+                triangleEnabled = selectedStations.size >= 3,
+                forecastAnimationEnabled = forecastAnimationEnabled,
+                onToggleForecastAnimation = { radarMapViewModel.toggleForecastAnimation() }
+            )
+        }
+        
+        // Forecast timeline scrubber (only visible in animation mode)
+        if (forecastAnimationEnabled && forecastTimeSteps.isNotEmpty() && !isRadarLoading) {
+            // Use horizontal scrubber in both modes - better for timeline visualization
+            HorizontalForecastScrubber(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(bottom = if (fullScreen) 0.dp else 8.dp),
+                timeSteps = forecastTimeSteps,
+                currentTimeIndex = currentTimeIndex,
+                onTimeStepSelected = { radarMapViewModel.updateCurrentTimeIndex(it) },
+                isPlaying = isAnimationPlaying,
+                onPlayPauseToggled = { radarMapViewModel.toggleAnimation() }
             )
         }
 
@@ -508,7 +582,9 @@ fun MapControls(
     onToggleStations: () -> Unit = {},
     showTriangle: Boolean = false,
     onToggleTriangle: () -> Unit = {},
-    triangleEnabled: Boolean = false
+    triangleEnabled: Boolean = false,
+    forecastAnimationEnabled: Boolean = false,
+    onToggleForecastAnimation: () -> Unit = {}
 ) {
     Card(
         modifier = modifier,
@@ -583,6 +659,13 @@ fun MapControls(
                 onCheckedChange = onToggleTriangle,
                 enabled = triangleEnabled
             )
+            
+            // Forecast animation toggle
+            LayerToggle(
+                label = "Forecast Animation",
+                checked = forecastAnimationEnabled,
+                onCheckedChange = onToggleForecastAnimation
+            )
         }
     }
 }
@@ -619,6 +702,7 @@ fun LayerToggle(
 }
 
 // Preview
+@RequiresApi(Build.VERSION_CODES.O)
 @Preview(showBackground = true, widthDp = 360)
 @Composable
 fun PreviewRadarMapComponent() {

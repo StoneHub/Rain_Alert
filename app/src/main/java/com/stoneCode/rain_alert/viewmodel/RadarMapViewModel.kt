@@ -1,6 +1,7 @@
 package com.stoneCode.rain_alert.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -9,9 +10,17 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.LatLng
 import com.stoneCode.rain_alert.api.WeatherStation
 import com.stoneCode.rain_alert.repository.RadarMapRepository
+import com.stoneCode.rain_alert.ui.map.ForecastTimeStep
+import com.stoneCode.rain_alert.ui.map.ForecastTimelineManager
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class RadarMapViewModel(application: Application) : AndroidViewModel(application) {
+    
+    // Timeline manager for forecast animations
+    private val forecastTimelineManager = ForecastTimelineManager.getInstance()
     
     // Reference to GoogleMap instance for overlays
     var googleMapInstance: GoogleMap? = null
@@ -43,6 +52,27 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
     
     private val _temperatureRadarUrl = MutableLiveData<String>()
     val temperatureRadarUrl: LiveData<String> = _temperatureRadarUrl
+    
+    // Forecast animation properties
+    private val _forecastTimeSteps = MutableLiveData<List<ForecastTimeStep>>(emptyList())
+    val forecastTimeSteps: LiveData<List<ForecastTimeStep>> = _forecastTimeSteps
+    
+    private val _currentTimeIndex = MutableLiveData<Int>(0)
+    val currentTimeIndex: LiveData<Int> = _currentTimeIndex
+    
+    private val _isAnimationPlaying = MutableLiveData<Boolean>(false)
+    val isAnimationPlaying: LiveData<Boolean> = _isAnimationPlaying
+    
+    private val _currentAnimationRadarUrl = MutableLiveData<String>()
+    val currentAnimationRadarUrl: LiveData<String> = _currentAnimationRadarUrl
+    
+    private val _forecastAnimationEnabled = MutableLiveData<Boolean>(false)
+    val forecastAnimationEnabled: LiveData<Boolean> = _forecastAnimationEnabled
+    
+    private val _forecastAnimationLayer = MutableLiveData<String>(ForecastTimelineManager.LAYER_PRECIPITATION)
+    val forecastAnimationLayer: LiveData<String> = _forecastAnimationLayer
+    
+    private var animationJob: Job? = null
     
     // Loading state
     private val _isLoading = MutableLiveData<Boolean>(false)
@@ -195,5 +225,208 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
         val calendar = java.util.Calendar.getInstance()
         val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:00", java.util.Locale.US)
         return dateFormat.format(calendar.time)
+    }
+    
+    /**
+     * Initialize forecast animation timeline
+     * @param layer The radar layer to animate
+     * @param hoursInPast Number of hours in the past to include
+     * @param hoursInFuture Number of hours in the future to include
+     * @param intervalHours Interval between time steps in hours
+     */
+    fun initForecastAnimation(
+        layer: String = ForecastTimelineManager.LAYER_PRECIPITATION,
+        hoursInPast: Int = 2,
+        hoursInFuture: Int = 18,
+        intervalHours: Int = 1
+    ) {
+        // Stop any existing animation
+        stopAnimation()
+        
+        // Set the animation layer
+        _forecastAnimationLayer.value = layer
+        
+        // Generate time steps asynchronously
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                // Generate time steps
+                val timeSteps = forecastTimelineManager.generateTimeSteps(
+                    layer = layer,
+                    hoursInPast = hoursInPast,
+                    hoursInFuture = hoursInFuture,
+                    intervalHours = intervalHours
+                )
+                
+                // Preload the first few URLs
+                val initialTimeSteps = timeSteps.take(5)
+                val preloadedUrls = forecastTimelineManager.preloadRadarUrls(layer, initialTimeSteps)
+                
+                if (preloadedUrls.isNotEmpty()) {
+                    _forecastTimeSteps.value = timeSteps
+                    _currentTimeIndex.value = 0
+                    _forecastAnimationEnabled.value = true
+                    
+                    // Set the current URL to the first time step
+                    if (timeSteps.isNotEmpty()) {
+                        updateCurrentFrameUrl()
+                    }
+                } else {
+                    _errorMessage.value = "Unable to load forecast animation data"
+                    _forecastAnimationEnabled.value = false
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Error initializing forecast animation: ${e.message}"
+                _forecastAnimationEnabled.value = false
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+    
+    /**
+     * Update the current time index and URL for the animation
+     */
+    fun updateCurrentTimeIndex(index: Int) {
+        val timeSteps = _forecastTimeSteps.value ?: return
+        if (index < 0 || index >= timeSteps.size) return
+        
+        _currentTimeIndex.value = index
+        updateCurrentFrameUrl()
+    }
+    
+    /**
+     * Toggle play/pause for the animation
+     */
+    fun toggleAnimation() {
+        val isPlaying = _isAnimationPlaying.value ?: false
+        if (isPlaying) {
+            stopAnimation()
+        } else {
+            startAnimation()
+        }
+    }
+    
+    /**
+     * Start the animation
+     */
+    fun startAnimation() {
+        val timeSteps = _forecastTimeSteps.value ?: return
+        if (timeSteps.isEmpty()) return
+        
+        // Cancel any existing animation job
+        animationJob?.cancel()
+        
+        // Set playing state immediately for UI response
+        _isAnimationPlaying.value = true
+        
+        // Start a new animation job
+        animationJob = viewModelScope.launch {
+            // Preload all URLs in the background first to avoid jumpy animation
+            _isLoading.value = true
+            try {
+                // Preload all frames
+                val layer = _forecastAnimationLayer.value ?: ForecastTimelineManager.LAYER_PRECIPITATION
+                val preloadedUrls = forecastTimelineManager.preloadRadarUrls(layer, timeSteps)
+                
+                // Only continue with animation if we have URLs
+                if (preloadedUrls.isNotEmpty()) {
+                    _isLoading.value = false
+                    
+                    // Animation loop - use delay to control frame rate
+                    while (isActive) {
+                        // Get the next index, wrapping around to 0 if at the end
+                        val currentIndex = _currentTimeIndex.value ?: 0
+                        val nextIndex = (currentIndex + 1) % timeSteps.size
+                        
+                        // Update the current index
+                        _currentTimeIndex.value = nextIndex
+                        updateCurrentFrameUrl()
+                        
+                        // Delay before showing the next frame
+                        delay(750) // 750ms between frames - slowed down for smoother appearance
+                    }
+                } else {
+                    _errorMessage.value = "Unable to load forecast animation frames"
+                    stopAnimation()
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Error preloading animation frames: ${e.message}"
+                stopAnimation()
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+    
+    /**
+     * Stop the animation
+     */
+    fun stopAnimation() {
+        animationJob?.cancel()
+        animationJob = null
+        _isAnimationPlaying.value = false
+    }
+    
+    /**
+     * Update the current frame URL based on the current time index
+     */
+    private fun updateCurrentFrameUrl() {
+        val timeSteps = _forecastTimeSteps.value ?: return
+        val currentIndex = _currentTimeIndex.value ?: 0
+        if (currentIndex < 0 || currentIndex >= timeSteps.size) return
+        
+        val layer = _forecastAnimationLayer.value ?: ForecastTimelineManager.LAYER_PRECIPITATION
+        val timestamp = timeSteps[currentIndex].timestamp
+        
+        try {
+            val url = forecastTimelineManager.createRadarUrlForTime(layer, timestamp)
+            _currentAnimationRadarUrl.value = url
+            Log.d("RadarMapViewModel", "Animation frame updated: $url")
+        } catch (e: Exception) {
+            Log.e("RadarMapViewModel", "Error updating animation frame: ${e.message}")
+        }
+    }
+    
+    /**
+     * Change the animation layer
+     */
+    fun changeAnimationLayer(layer: String) {
+        if (_forecastAnimationLayer.value == layer) return
+        
+        // Stop the animation and reinitialize with the new layer
+        stopAnimation()
+        _forecastAnimationLayer.value = layer
+        _forecastAnimationEnabled.value = false
+        _forecastTimeSteps.value = emptyList()
+        
+        // Reinitialize the animation with the new layer
+        initForecastAnimation(layer)
+    }
+    
+    /**
+     * Toggle forecast animation mode
+     */
+    fun toggleForecastAnimation() {
+        val isEnabled = _forecastAnimationEnabled.value ?: false
+        
+        if (isEnabled) {
+            // Disable animation mode
+            stopAnimation()
+            _forecastAnimationEnabled.value = false
+            _forecastTimeSteps.value = emptyList()
+        } else {
+            // Enable animation mode
+            initForecastAnimation()
+        }
+    }
+    
+    /**
+     * Clean up resources when the ViewModel is cleared
+     */
+    override fun onCleared() {
+        super.onCleared()
+        stopAnimation()
+        forecastTimelineManager.clearCache()
     }
 }
