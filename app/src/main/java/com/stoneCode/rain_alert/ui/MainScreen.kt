@@ -227,6 +227,14 @@ fun MainScreen(
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         Column {
+                            // Title at the top
+                            Text(
+                                text = "Weather Radar",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(16.dp, 16.dp, 16.dp, 8.dp)
+                            )
+                            
                             // Map container with fixed height
                             Box(
                                 modifier = Modifier
@@ -264,13 +272,6 @@ fun MainScreen(
                                     onChangeLocationClick = { showLocationDialog = true }
                                 )
                             }
-                            
-                            Text(
-                                text = "Weather Radar",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(16.dp)
-                            )
                         }
                     }
                     
