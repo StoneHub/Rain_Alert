@@ -27,6 +27,21 @@ fun WeatherMapScreen(
     onBackClick: () -> Unit = {},
     radarMapViewModel: RadarMapViewModel = viewModel()
 ) {
+    // Initialize with precipitation layer if no layer is active
+    LaunchedEffect(Unit) {
+        Log.d("WeatherMapScreen", "Initializing WeatherMapScreen")
+        if (radarMapViewModel.activeLayer.value == RadarMapViewModel.WeatherLayer.NONE) {
+            Log.d("WeatherMapScreen", "Setting default precipitation layer")
+            radarMapViewModel.setActiveLayer(RadarMapViewModel.WeatherLayer.PRECIPITATION)
+        }
+        
+        // Ensure radar data is fetched
+        if (radarMapViewModel.precipitationRadarUrl.value == null) {
+            Log.d("WeatherMapScreen", "Fetching radar data")
+            radarMapViewModel.fetchRadarData()
+        }
+    }
+
     // Use the shared map component with fullscreen display mode
     SharedMapComponent(
         modifier = modifier,
@@ -35,7 +50,11 @@ fun WeatherMapScreen(
         myLocation = myLocation,
         selectedStations = selectedStations,
         isLoading = isLoading,
-        onRefresh = onRefresh,
+        onRefresh = {
+            Log.d("WeatherMapScreen", "Refreshing data")
+            onRefresh()
+            radarMapViewModel.refreshRadarData()
+        },
         onMyLocationClick = onMyLocationClick,
         onBackClick = onBackClick,
         radarMapViewModel = radarMapViewModel

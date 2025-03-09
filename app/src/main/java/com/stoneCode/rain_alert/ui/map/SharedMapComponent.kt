@@ -66,6 +66,15 @@ fun SharedMapComponent(
     val isRadarLoading by radarMapViewModel.isLoading.observeAsState(false)
     val lastLocation by radarMapViewModel.lastKnownLocation.observeAsState()
     
+    // Debug logging for layer state
+    LaunchedEffect(activeLayer, precipitationRadarUrl, windRadarUrl, temperatureRadarUrl) {
+        Log.d("SharedMapComponent", "Display Mode: $displayMode")
+        Log.d("SharedMapComponent", "Active Layer: $activeLayer")
+        Log.d("SharedMapComponent", "Precipitation URL: $precipitationRadarUrl")
+        Log.d("SharedMapComponent", "Wind URL: $windRadarUrl")
+        Log.d("SharedMapComponent", "Temperature URL: $temperatureRadarUrl")
+    }
+    
     // Determine if controls should be shown for carousel mode
     var showControls by remember { mutableStateOf(false) }
     
