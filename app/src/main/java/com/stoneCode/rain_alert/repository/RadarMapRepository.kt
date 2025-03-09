@@ -3,8 +3,10 @@ package com.stoneCode.rain_alert.repository
 import android.content.Context
 import android.util.Log
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
 import com.stoneCode.rain_alert.api.WeatherStation
 import com.stoneCode.rain_alert.data.AppConfig
+import com.stoneCode.rain_alert.util.MapCoordinateUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -25,26 +27,13 @@ class RadarMapRepository(private val context: Context) {
      * Get precipitation radar tile URL for a specific area
      * Note: Weather.gov API provides radar data as WMS tiles
      */
-    suspend fun getPrecipitationRadarUrl(center: LatLng): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun getPrecipitationRadarUrl(center: LatLng, mapBounds: LatLngBounds? = null): Result<String> = withContext(Dispatchers.IO) {
         try {
             // Use the NWS WMS service for precipitation data (Quantitative Precipitation Forecast)
             // See: https://digital.weather.gov/ndfd.conus/wms?REQUEST=GetCapabilities
             
-            // Create a proper WMS request URL
-            // Parameters explained:
-            // SERVICE=WMS - The service type
-            // VERSION=1.3.0 - WMS version
-            // REQUEST=GetMap - We want a map image
-            // LAYERS=ndfd.conus.qpf - Quantitative Precipitation Forecast layer
-            // FORMAT=image/png - Image format
-            // TRANSPARENT=TRUE - Allow transparency
-            // CRS=EPSG:3857 - Coordinate reference system (Web Mercator)
-            // WIDTH, HEIGHT - Image dimensions
-            // BBOX - Bounding box coordinates
-            // VTIT - Valid time (current date/time formatted as 2025-03-04T00:00)
-            
             // Use our helper function to create the WMS URL
-            val radarUrl = createWmsUrl("ndfd.conus.qpf") // Quantitative Precipitation Forecast
+            val radarUrl = createWmsUrl("ndfd.conus.qpf", mapBounds) // Quantitative Precipitation Forecast
             
             Log.d("RadarMapRepository", "Generated WMS URL: $radarUrl")
             
@@ -71,13 +60,13 @@ class RadarMapRepository(private val context: Context) {
     /**
      * Get wind speed radar tile URL for a specific area
      */
-    suspend fun getWindRadarUrl(center: LatLng): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun getWindRadarUrl(center: LatLng, mapBounds: LatLngBounds? = null): Result<String> = withContext(Dispatchers.IO) {
         try {
             // Use the NWS WMS service for wind data
             // See: https://digital.weather.gov/ndfd.conus/wms?REQUEST=GetCapabilities
             
             // Use our helper function to create the WMS URL
-            val windUrl = createWmsUrl("ndfd.conus.windspd") // Wind Speed layer
+            val windUrl = createWmsUrl("ndfd.conus.windspd", mapBounds) // Wind Speed layer
             
             Log.d("RadarMapRepository", "Generated Wind WMS URL: $windUrl")
             
@@ -104,15 +93,19 @@ class RadarMapRepository(private val context: Context) {
     /**
      * Get temperature radar tile URL for a specific area
      */
-    suspend fun getTemperatureRadarUrl(center: LatLng): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun getTemperatureRadarUrl(center: LatLng, mapBounds: LatLngBounds? = null): Result<String> = withContext(Dispatchers.IO) {
         try {
-            // Use the NWS WMS service for temperature data
-            // The temperature endpoint uses a slightly different URL structure
-            
             // Format the current date for the VTIT parameter
             val calendar = java.util.Calendar.getInstance()
             val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'00:00", java.util.Locale.US)
             val validTime = dateFormat.format(calendar.time)
+            
+            // Calculate bbox from the current map view or use a default
+            val bbox = if (mapBounds != null) {
+                MapCoordinateUtils.latLngBoundsToBbox(mapBounds)
+            } else {
+                MapCoordinateUtils.getDefaultUsBbox()
+            }
             
             // Create temperature-specific URL using the working format
             val temperatureUrl = "https://digital.weather.gov/ndfd/wms?" +
@@ -129,9 +122,9 @@ class RadarMapRepository(private val context: Context) {
                 "&CRS=EPSG:3857" +
                 "&WIDTH=1000" +
                 "&HEIGHT=600" +
-                "&BBOX=-14200679.12,2500000,-7400000,6505689.94"
+                "&BBOX=$bbox"
             
-            Log.d("RadarMapRepository", "Generated Temperature WMS URL: $temperatureUrl")
+            Log.d("RadarMapRepository", "Generated Temperature WMS URL with BBOX: $bbox")
             
             // Verify the URL works by making a request
             val request = Request.Builder()
@@ -155,10 +148,11 @@ class RadarMapRepository(private val context: Context) {
     
     /**
      * Generate a WMS URL for the specified layer and parameters
+     * Now using dynamic bbox based on current map view
      */
-    private fun createWmsUrl(
+    fun createWmsUrl(
         layer: String,
-        bbox: String = "-14200679.12,2500000,-7400000,6505689.94",
+        mapBounds: LatLngBounds? = null,
         width: Int = 1000,
         height: Int = 600
     ): String {
@@ -166,6 +160,15 @@ class RadarMapRepository(private val context: Context) {
         val calendar = java.util.Calendar.getInstance()
         val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:00", java.util.Locale.US)
         val validTime = dateFormat.format(calendar.time)
+        
+        // Calculate bbox from the current map view or use a default
+        val bbox = if (mapBounds != null) {
+            MapCoordinateUtils.latLngBoundsToBbox(mapBounds)
+        } else {
+            MapCoordinateUtils.getDefaultUsBbox()
+        }
+        
+        Log.d("RadarMapRepository", "Using BBOX: $bbox for layer: $layer")
         
         return "https://digital.weather.gov/ndfd.conus/wms?" +
             "SERVICE=WMS" +

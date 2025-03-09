@@ -5,9 +5,11 @@ import android.graphics.BitmapFactory
 import android.util.Log
 import androidx.compose.runtime.*
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
 import com.google.maps.android.compose.GroundOverlay
 import com.google.maps.android.compose.GroundOverlayPosition
+import com.stoneCode.rain_alert.util.MapCoordinateUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.InputStream
@@ -17,25 +19,39 @@ import java.net.URL
 /**
  * A Composable that adds a ground overlay to a Google Map using Jetpack Compose.
  * Enhanced version with better error handling and loading indicator.
- *
- * This file is unchanged from before; the main layering fixes are done by adjusting
- * z-indexes in the call sites (i.e., RadarMapComponent).
  */
 @Composable
 fun WeatherOverlay(
     imageUrl: String?,
     visible: Boolean = true,
-    bounds: LatLngBounds = LatLngBounds.builder()
-        .include(com.google.android.gms.maps.model.LatLng(24.0, -125.0))
-        .include(com.google.android.gms.maps.model.LatLng(49.0, -66.0))
-        .build(),
+    customBounds: LatLngBounds? = null,
     transparency: Float = 0.3f,  // 0.0 is fully opaque, 1.0 is fully transparent
     zIndex: Float = 0f
 ) {
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
-
     var isLoading by remember { mutableStateOf(false) }
     var loadError by remember { mutableStateOf<String?>(null) }
+    
+    // Try to extract bbox from the URL or use the custom bounds provided
+    val bounds = remember(imageUrl, customBounds) {
+        try {
+            if (imageUrl != null && imageUrl.contains("BBOX=")) {
+                val bboxParam = imageUrl.substringAfter("BBOX=").substringBefore("&")
+                MapCoordinateUtils.bboxToLatLngBounds(bboxParam)
+            } else {
+                customBounds ?: LatLngBounds.builder()
+                    .include(LatLng(24.0, -125.0))
+                    .include(LatLng(49.0, -66.0))
+                    .build()
+            }
+        } catch (e: Exception) {
+            Log.e("WeatherOverlay", "Error extracting bbox from URL: ${e.message}")
+            customBounds ?: LatLngBounds.builder()
+                .include(LatLng(24.0, -125.0))
+                .include(LatLng(49.0, -66.0))
+                .build()
+        }
+    }
 
     // Load bitmap from URL
     LaunchedEffect(imageUrl, visible) {
@@ -44,6 +60,7 @@ fun WeatherOverlay(
             loadError = null
             try {
                 Log.d("WeatherOverlay", "Starting to load bitmap from URL: $imageUrl")
+                Log.d("WeatherOverlay", "Using bounds: $bounds")
                 bitmap = loadBitmapFromUrl(imageUrl)
                 if (bitmap != null) {
                     Log.d("WeatherOverlay", "Bitmap loaded: ${bitmap?.width}x${bitmap?.height}")

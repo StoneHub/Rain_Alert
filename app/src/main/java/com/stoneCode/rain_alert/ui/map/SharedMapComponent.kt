@@ -119,8 +119,22 @@ fun SharedMapComponent(
     LaunchedEffect(cameraPositionState.isMoving) {
         if (!cameraPositionState.isMoving && initialized.value) {
             val currentPos = cameraPositionState.position
-            radarMapViewModel.updateMapCenter(currentPos.target)
-            radarMapViewModel.updateMapZoom(currentPos.zoom)
+            val visibleBounds = cameraPositionState.projection?.visibleRegion?.latLngBounds
+            
+            if (visibleBounds != null) {
+                radarMapViewModel.updateMapCamera(
+                    currentPos.target,
+                    currentPos.zoom,
+                    visibleBounds
+                )
+                
+                // After updating the camera and bounds, refresh the radar data
+                if (activeLayer == RadarMapViewModel.WeatherLayer.PRECIPITATION || 
+                    activeLayer == RadarMapViewModel.WeatherLayer.WIND || 
+                    activeLayer == RadarMapViewModel.WeatherLayer.TEMPERATURE) {
+                    radarMapViewModel.fetchRadarData(currentPos.target)
+                }
+            }
         }
     }
     

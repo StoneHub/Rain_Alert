@@ -7,6 +7,7 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
 import com.stoneCode.rain_alert.api.WeatherStation
 import com.stoneCode.rain_alert.repository.RadarMapRepository
 import kotlinx.coroutines.launch
@@ -25,6 +26,10 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
     
     private val _mapZoom = MutableLiveData<Float>(4f)
     val mapZoom: LiveData<Float> = _mapZoom
+    
+    // Map bounds for weather overlays
+    private val _mapBounds = MutableLiveData<LatLngBounds>()
+    val mapBounds: LiveData<LatLngBounds> = _mapBounds
     
     // Track last known user location for persistence between views
     private val _lastKnownLocation = MutableLiveData<LatLng?>()
@@ -150,8 +155,10 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
             _errorMessage.value = null
             
             try {
+                val currentBounds = _mapBounds.value
+                
                 // Fetch precipitation radar
-                radarMapRepository.getPrecipitationRadarUrl(center).fold(
+                radarMapRepository.getPrecipitationRadarUrl(center, currentBounds).fold(
                     onSuccess = { url ->
                         _precipitationRadarUrl.value = url
                     },
@@ -161,7 +168,7 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
                 )
                 
                 // Fetch wind radar
-                radarMapRepository.getWindRadarUrl(center).fold(
+                radarMapRepository.getWindRadarUrl(center, currentBounds).fold(
                     onSuccess = { url ->
                         _windRadarUrl.value = url
                     },
@@ -174,7 +181,7 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
                 )
                 
                 // Fetch temperature data
-                radarMapRepository.getTemperatureRadarUrl(center).fold(
+                radarMapRepository.getTemperatureRadarUrl(center, currentBounds).fold(
                     onSuccess = { url ->
                         _temperatureRadarUrl.value = url
                         Log.d("RadarMapViewModel", "Loaded temperature data: $url")
@@ -191,6 +198,15 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
                 _isLoading.value = false
             }
         }
+    }
+    
+    /**
+     * Update map camera position including bounds
+     */
+    fun updateMapCamera(center: LatLng, zoom: Float, bounds: LatLngBounds? = null) {
+        _mapCenter.value = center
+        _mapZoom.value = zoom
+        bounds?.let { _mapBounds.value = it }
     }
     
     /**
@@ -222,8 +238,9 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             try {
                 val center = _mapCenter.value ?: LatLng(40.0, -98.0)
+                val currentBounds = _mapBounds.value
                 
-                radarMapRepository.getTemperatureRadarUrl(center).fold(
+                radarMapRepository.getTemperatureRadarUrl(center, currentBounds).fold(
                     onSuccess = { url ->
                         _temperatureRadarUrl.value = url
                         Log.d("RadarMapViewModel", "Loaded temperature data: $url")
