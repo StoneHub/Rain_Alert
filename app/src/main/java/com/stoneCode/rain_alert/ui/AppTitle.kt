@@ -13,8 +13,11 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun AppTitle(compact: Boolean = false) {
-    // Use white text for app title for better contrast on both backgrounds
-    val titleColor = if (isSystemInDarkTheme()) {
+    // For compact mode (app bar), use on-surface color to match other component titles
+    // For full mode, use white text for better contrast on background image
+    val titleColor = if (compact) {
+        MaterialTheme.colorScheme.onSurface
+    } else if (isSystemInDarkTheme()) {
         Color.White.copy(alpha = 0.95f) // Very slightly transparent white for dark mode
     } else {
         Color.White.copy(alpha = 0.9f) // Slightly transparent white for light mode
@@ -23,7 +26,7 @@ fun AppTitle(compact: Boolean = false) {
     if (compact) {
         Text(
             text = "Rain Alert",
-            style = MaterialTheme.typography.titleLarge.copy(
+            style = MaterialTheme.typography.titleMedium.copy(
                 fontWeight = FontWeight.Bold,
                 color = titleColor
             ),

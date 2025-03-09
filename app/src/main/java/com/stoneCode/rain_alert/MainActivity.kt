@@ -121,7 +121,7 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 // For older versions - need at least the location permission
                                 ContextCompat.checkSelfPermission(
-                                    this@MainActivity, 
+                                    this@MainActivity,
                                     Manifest.permission.ACCESS_FINE_LOCATION
                                 ) == PackageManager.PERMISSION_GRANTED
                             }
@@ -132,7 +132,10 @@ class MainActivity : ComponentActivity() {
                                 requestRequiredPermissions()
                             } else {
                                 // For older versions - request just the location permission
-                                requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 100)
+                                requestPermissions(
+                                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                                    100
+                                )
                             }
                         }
                     },
@@ -141,10 +144,6 @@ class MainActivity : ComponentActivity() {
                         val stopIntent = Intent(this@MainActivity, RainService::class.java)
                         stopIntent.action = "STOP_SERVICE"
                         stopService(stopIntent)
-                    },
-                    onOpenWeatherWebsiteClick = {
-                        Log.d("MainActivity", "Open Weather Website button clicked")
-                        openWeatherWebsite()
                     },
                     onSettingsClick = {
                         navController.navigate("settings")
@@ -157,6 +156,28 @@ class MainActivity : ComponentActivity() {
                     },
                     onMapClick = {
                         navController.navigate("weather_map")
+                    },
+                    onOpenAppSettings = {
+                        Log.d("MainActivity", "Opening app settings")
+                        try {
+                            val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", packageName, null)
+                            }
+                            startActivity(intent)
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Error opening app settings", e)
+                            Toast.makeText(this@MainActivity, "Could not open app settings", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onOpenBatterySettings = {
+                        Log.d("MainActivity", "Opening battery optimization settings")
+                        try {
+                            val intent = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                            startActivity(intent)
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Error opening battery settings", e)
+                            Toast.makeText(this@MainActivity, "Could not open battery settings", Toast.LENGTH_SHORT).show()
+                        }
                     },
                     weatherViewModel = weatherViewModel
                 )
@@ -319,16 +340,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun openWeatherWebsite() {
-        Log.d("MainActivity", "Opening Weather Website")
-        val location = weatherRepository.getLastKnownLocation()
-        if (location != null) {
-            val websiteUrl = "https://forecast.weather.gov/MapClick.php?lat=${location.latitude}&lon=${location.longitude}"
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(websiteUrl))
-            startActivity(intent)
-        } else {
-            Log.w("MainActivity", "Could not get location to open weather website")
-            Toast.makeText(this, "Could not get location", Toast.LENGTH_SHORT).show()
-        }
-    }
 }
