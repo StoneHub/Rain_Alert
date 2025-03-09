@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.AirplanemodeActive
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Thermostat
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -37,6 +38,7 @@ fun WeatherMapScreen(
     isLoading: Boolean = false,
     onRefresh: () -> Unit = {},
     onMyLocationClick: () -> Unit = {},
+    onBackClick: () -> Unit = {},
     radarMapViewModel: RadarMapViewModel = viewModel()
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -76,9 +78,17 @@ fun WeatherMapScreen(
     }
     
     Column(modifier = modifier.fillMaxSize()) {
-        // Top Bar with title
+        // Top Bar with title and back button
         TopAppBar(
-            title = { Text("Current Weather") }
+            title = { Text("Current Weather") },
+            navigationIcon = {
+                IconButton(onClick = onBackClick) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back"
+                    )
+                }
+            }
         )
         
         // Weather layer controls

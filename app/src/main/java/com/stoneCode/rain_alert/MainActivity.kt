@@ -207,6 +207,9 @@ class MainActivity : ComponentActivity() {
                                 requestRequiredPermissions()
                             }
                         }
+                    },
+                    onBackClick = {
+                        navController.popBackStack()
                     }
                 )
             }

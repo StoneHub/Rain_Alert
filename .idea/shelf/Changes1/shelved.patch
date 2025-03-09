@@ -1,0 +1,440 @@
+Index: app/src/main/java/com/stoneCode/rain_alert/MainActivity.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.stoneCode.rain_alert\r\n\r\nimport android.Manifest\r\nimport android.content.Intent\r\nimport android.content.pm.PackageManager\r\nimport android.net.Uri\r\nimport android.os.Build\r\nimport android.os.Bundle\r\nimport android.util.Log\r\nimport android.widget.Toast\r\nimport com.google.android.gms.maps.model.LatLng\r\nimport androidx.activity.ComponentActivity\r\nimport androidx.activity.compose.setContent\r\nimport androidx.activity.enableEdgeToEdge\r\nimport androidx.activity.result.contract.ActivityResultContracts\r\nimport androidx.annotation.RequiresApi\r\nimport androidx.compose.runtime.Composable\r\nimport androidx.core.content.ContextCompat\r\nimport androidx.navigation.compose.NavHost\r\nimport androidx.navigation.compose.composable\r\nimport androidx.navigation.compose.rememberNavController\r\nimport com.stoneCode.rain_alert.firebase.FirebaseLogger\r\nimport com.stoneCode.rain_alert.repository.WeatherRepository\r\nimport com.stoneCode.rain_alert.service.RainService\r\nimport com.stoneCode.rain_alert.ui.AlertHistoryScreen\r\nimport com.stoneCode.rain_alert.ui.MainScreen\r\nimport com.stoneCode.rain_alert.ui.SettingsScreen\r\nimport com.stoneCode.rain_alert.ui.map.WeatherMapScreen\r\nimport com.stoneCode.rain_alert.ui.theme.Rain_AlertTheme\r\nimport com.stoneCode.rain_alert.viewmodel.WeatherViewModel\r\n\r\nclass MainActivity : ComponentActivity() {\r\n    private lateinit var weatherViewModel: WeatherViewModel\r\n    private lateinit var weatherRepository: WeatherRepository\r\n    private lateinit var firebaseLogger: FirebaseLogger\r\n\r\n    @RequiresApi(Build.VERSION_CODES.TIRAMISU)\r\n    private val requestPermissionLauncher = registerForActivityResult(\r\n        ActivityResultContracts.RequestMultiplePermissions()\r\n    ) { permissions ->\r\n        val isFineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false\r\n        val isForegroundServiceLocationGranted =\r\n            permissions[Manifest.permission.FOREGROUND_SERVICE_LOCATION] ?: false\r\n        val isPostNotificationsGranted =\r\n            permissions[Manifest.permission.POST_NOTIFICATIONS] ?: false\r\n\r\n        Log.d(\"MainActivity\", \"Fine Location Granted: $isFineLocationGranted\")\r\n        Log.d(\r\n            \"MainActivity\",\r\n            \"Foreground Service Location Granted: $isForegroundServiceLocationGranted\"\r\n        )\r\n        Log.d(\"MainActivity\", \"Post Notifications Granted: $isPostNotificationsGranted\")\r\n\r\n        if (isFineLocationGranted && isForegroundServiceLocationGranted && isPostNotificationsGranted) {\r\n            startRainService()\r\n        } else {\r\n            if (!isFineLocationGranted) {\r\n                Toast.makeText(this, \"Location permission denied\", Toast.LENGTH_SHORT).show()\r\n                Log.w(\"MainActivity\", \"Location permission denied\")\r\n            }\r\n            if (!isForegroundServiceLocationGranted) {\r\n                Toast.makeText(\r\n                    this,\r\n                    \"Foreground service location permission denied\",\r\n                    Toast.LENGTH_SHORT\r\n                ).show()\r\n                Log.w(\"MainActivity\", \"Foreground service location permission denied\")\r\n            }\r\n            if (!isPostNotificationsGranted) {\r\n                Toast.makeText(\r\n                    this,\r\n                    \"Notification permission denied, you will not receive alerts.\",\r\n                    Toast.LENGTH_SHORT\r\n                ).show()\r\n                Log.w(\"MainActivity\", \"Post notifications permission denied\")\r\n            }\r\n        }\r\n    }\r\n\r\n    @RequiresApi(Build.VERSION_CODES.TIRAMISU)\r\n    override fun onCreate(savedInstanceState: Bundle?) {\r\n        super.onCreate(savedInstanceState)\r\n        weatherViewModel = WeatherViewModel(application)\r\n        weatherRepository = WeatherRepository(this)\r\n        \r\n        // Initialize Firebase Logger\r\n        firebaseLogger = FirebaseLogger.getInstance()\r\n        firebaseLogger.initialize(this)\r\n        \r\n        // Check for permissions right away if coming from a notification\r\n        if (intent != null && (intent.hasExtra(\"checkPermissions\") || intent.action == \"android.settings.APP_NOTIFICATION_SETTINGS\")) {\r\n            Log.d(\"MainActivity\", \"Checking permissions on launch\")\r\n            if (hasRequiredPermissions()) {\r\n                // If permissions are now granted and we were coming from a notification, start the service\r\n                startRainService()\r\n            } else {\r\n                // If still missing permissions, request them\r\n                requestRequiredPermissions()\r\n            }\r\n        }\r\n        \r\n        enableEdgeToEdge()\r\n        setContent {\r\n            Rain_AlertTheme {\r\n                AppNavigation()\r\n            }\r\n        }\r\n    }\r\n\r\n    @Composable\r\n    fun AppNavigation() {\r\n        val navController = rememberNavController()\r\n        \r\n        NavHost(navController = navController, startDestination = \"main\") {\r\n            composable(\"main\") {\r\n                MainScreen(\r\n                    onStartServiceClick = {\r\n                        Log.d(\"MainActivity\", \"Start Service button clicked\")\r\n                        if (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {\r\n                                hasRequiredPermissions()\r\n                            } else {\r\n                                // For older versions - need at least the location permission\r\n                                ContextCompat.checkSelfPermission(\r\n                                    this@MainActivity, \r\n                                    Manifest.permission.ACCESS_FINE_LOCATION\r\n                                ) == PackageManager.PERMISSION_GRANTED\r\n                            }\r\n                        ) {\r\n                            startRainService()\r\n                        } else {\r\n                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {\r\n                                requestRequiredPermissions()\r\n                            } else {\r\n                                // For older versions - request just the location permission\r\n                                requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 100)\r\n                            }\r\n                        }\r\n                    },\r\n                    onStopServiceClick = {\r\n                        Log.d(\"MainActivity\", \"Stopping RainService\")\r\n                        val stopIntent = Intent(this@MainActivity, RainService::class.java)\r\n                        stopIntent.action = \"STOP_SERVICE\"\r\n                        stopService(stopIntent)\r\n                    },\r\n                    onOpenWeatherWebsiteClick = {\r\n                        Log.d(\"MainActivity\", \"Open Weather Website button clicked\")\r\n                        openWeatherWebsite()\r\n                    },\r\n                    onSettingsClick = {\r\n                        navController.navigate(\"settings\")\r\n                    },\r\n                    onViewHistoryClick = {\r\n                        navController.navigate(\"alert_history\")\r\n                    },\r\n                    onOpenStationWebsiteClick = { stationUrl ->\r\n                        openStationWebsite(stationUrl)\r\n                    },\r\n                    onMapClick = {\r\n                        navController.navigate(\"weather_map\")\r\n                    },\r\n                    weatherViewModel = weatherViewModel\r\n                )\r\n            }\r\n            \r\n            composable(\"alert_history\") {\r\n                AlertHistoryScreen(\r\n                    onBackClick = {\r\n                        navController.popBackStack()\r\n                    },\r\n                    weatherViewModel = weatherViewModel\r\n                )\r\n            }\r\n            composable(\"settings\") {\r\n                SettingsScreen(\r\n                    onBackPressed = {\r\n                        navController.popBackStack()\r\n                    },\r\n                    onSimulateRainClick = {\r\n                        simulateRain()\r\n                    },\r\n                    onSimulateFreezeClick = {\r\n                        Log.d(\"MainActivity\", \"Simulating Freeze Warning\")\r\n                        val simulateFreezeIntent = Intent(this@MainActivity, RainService::class.java)\r\n                        simulateFreezeIntent.action = \"SIMULATE_FREEZE\"\r\n                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {\r\n                            startForegroundService(simulateFreezeIntent)\r\n                        } else {\r\n                            startService(simulateFreezeIntent)\r\n                        }\r\n                    }\r\n                )\r\n            }\r\n            \r\n            composable(\"weather_map\") {\r\n                WeatherMapScreen(\r\n                    myLocation = weatherRepository.getLastKnownLocation()?.let { \r\n                        LatLng(it.latitude, it.longitude) \r\n                    },\r\n                    onRefresh = {\r\n                        // Refresh weather data\r\n                        weatherViewModel.updateWeatherStatus()\r\n                    },\r\n                    onMyLocationClick = {\r\n                        // Request location permission if needed\r\n                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {\r\n                            if (!hasRequiredPermissions()) {\r\n                                requestRequiredPermissions()\r\n                            }\r\n                        }\r\n                    }\r\n                )\r\n            }\r\n        }\r\n    }\r\n\r\n    override fun onResume() {\r\n        super.onResume()\r\n        weatherViewModel.registerServiceStatusListener()\r\n        weatherViewModel.updateWeatherStatus()\r\n    }\r\n\r\n    override fun onPause() {\r\n        super.onPause()\r\n        weatherViewModel.unregisterServiceStatusListener()\r\n    }\r\n\r\n    @RequiresApi(Build.VERSION_CODES.TIRAMISU)\r\n    private fun hasRequiredPermissions(): Boolean {\r\n        val fineLocationGranted = ContextCompat.checkSelfPermission(\r\n            this,\r\n            Manifest.permission.ACCESS_FINE_LOCATION\r\n        ) == PackageManager.PERMISSION_GRANTED\r\n        val foregroundServiceLocationGranted = ContextCompat.checkSelfPermission(\r\n            this,\r\n            Manifest.permission.FOREGROUND_SERVICE_LOCATION\r\n        ) == PackageManager.PERMISSION_GRANTED\r\n        val postNotificationsGranted = ContextCompat.checkSelfPermission(\r\n            this,\r\n            Manifest.permission.POST_NOTIFICATIONS\r\n        ) == PackageManager.PERMISSION_GRANTED\r\n\r\n        Log.d(\"MainActivity\", \"Has Required Permissions - Fine Location Granted: $fineLocationGranted\")\r\n        Log.d(\"MainActivity\", \"Has Required Permissions - Foreground Service Location Granted: $foregroundServiceLocationGranted\")\r\n        Log.d(\"MainActivity\", \"Has Required Permissions - Post Notifications Granted: $postNotificationsGranted\")\r\n\r\n        return fineLocationGranted && foregroundServiceLocationGranted && postNotificationsGranted\r\n    }\r\n\r\n    @RequiresApi(Build.VERSION_CODES.TIRAMISU)\r\n    private fun requestRequiredPermissions() {\r\n        val permissionsToRequest = mutableListOf<String>()\r\n        if (ContextCompat.checkSelfPermission(\r\n                this,\r\n                Manifest.permission.ACCESS_FINE_LOCATION\r\n            ) != PackageManager.PERMISSION_GRANTED\r\n        ) {\r\n            permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)\r\n        }\r\n        if (ContextCompat.checkSelfPermission(\r\n                this,\r\n                Manifest.permission.FOREGROUND_SERVICE_LOCATION\r\n            ) != PackageManager.PERMISSION_GRANTED\r\n        ) {\r\n            permissionsToRequest.add(Manifest.permission.FOREGROUND_SERVICE_LOCATION)\r\n        }\r\n        if (ContextCompat.checkSelfPermission(\r\n                this,\r\n                Manifest.permission.POST_NOTIFICATIONS\r\n            ) != PackageManager.PERMISSION_GRANTED\r\n        ) {\r\n            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)\r\n        }\r\n\r\n        Log.d(\"MainActivity\", \"Requesting permissions: $permissionsToRequest\")\r\n\r\n        if (permissionsToRequest.isNotEmpty()) {\r\n            requestPermissionLauncher.launch(permissionsToRequest.toTypedArray())\r\n        }\r\n    }\r\n\r\n    private fun startRainService() {\r\n        Log.d(\"MainActivity\", \"Starting RainService\")\r\n        val serviceIntent = Intent(this, RainService::class.java).apply {\r\n            action = \"START_RAIN_CHECK\"\r\n        }\r\n        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {\r\n            startForegroundService(serviceIntent)\r\n        } else {\r\n            startService(serviceIntent)\r\n        }\r\n        \r\n        // Log service start to Firebase\r\n        firebaseLogger.logServiceStatusChanged(true)\r\n    }\r\n\r\n    private fun simulateRain() {\r\n        Log.d(\"MainActivity\", \"Simulating Rain\")\r\n        val serviceIntent = Intent(this, RainService::class.java).apply {\r\n            action = \"SIMULATE_RAIN\"\r\n        }\r\n        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {\r\n            startForegroundService(serviceIntent)\r\n        } else {\r\n            startService(serviceIntent)\r\n        }\r\n    }\r\n\r\n    private fun openStationWebsite(stationUrl: String) {\r\n        Log.d(\"MainActivity\", \"Opening Station Website: $stationUrl\")\r\n        try {\r\n            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(stationUrl))\r\n            startActivity(intent)\r\n        } catch (e: Exception) {\r\n            Log.e(\"MainActivity\", \"Error opening station URL: $stationUrl\", e)\r\n            Toast.makeText(this, \"Could not open station website\", Toast.LENGTH_SHORT).show()\r\n        }\r\n    }\r\n\r\n    private fun openWeatherWebsite() {\r\n        Log.d(\"MainActivity\", \"Opening Weather Website\")\r\n        val location = weatherRepository.getLastKnownLocation()\r\n        if (location != null) {\r\n            val websiteUrl = \"https://forecast.weather.gov/MapClick.php?lat=${location.latitude}&lon=${location.longitude}\"\r\n            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(websiteUrl))\r\n            startActivity(intent)\r\n        } else {\r\n            Log.w(\"MainActivity\", \"Could not get location to open weather website\")\r\n            Toast.makeText(this, \"Could not get location\", Toast.LENGTH_SHORT).show()\r\n        }\r\n    }\r\n}
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/stoneCode/rain_alert/MainActivity.kt b/app/src/main/java/com/stoneCode/rain_alert/MainActivity.kt
+--- a/app/src/main/java/com/stoneCode/rain_alert/MainActivity.kt	(revision 53f051acc55df57f474c72f304b87499479dfe28)
++++ b/app/src/main/java/com/stoneCode/rain_alert/MainActivity.kt	(date 1741534473517)
+@@ -199,6 +199,14 @@
+                     onRefresh = {
+                         // Refresh weather data
+                         weatherViewModel.updateWeatherStatus()
++                        
++                        // This will also trigger a refresh in the RadarMapViewModel
++                        val radarMapViewModel = androidx.lifecycle.viewmodel.compose.viewModel<com.stoneCode.rain_alert.viewmodel.RadarMapViewModel>()
++                        val currentLocation = weatherRepository.getLastKnownLocation()
++                        if (currentLocation != null) {
++                            val latLng = LatLng(currentLocation.latitude, currentLocation.longitude)
++                            radarMapViewModel.fetchRadarData(latLng)
++                        }
+                     },
+                     onMyLocationClick = {
+                         // Request location permission if needed
+@@ -206,6 +214,18 @@
+                             if (!hasRequiredPermissions()) {
+                                 requestRequiredPermissions()
+                             }
++                        } else {
++                            if (ContextCompat.checkSelfPermission(
++                                    this@MainActivity,
++                                    Manifest.permission.ACCESS_FINE_LOCATION
++                                ) != PackageManager.PERMISSION_GRANTED
++                            ) {
++                                ActivityCompat.requestPermissions(
++                                    this@MainActivity,
++                                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
++                                    100
++                                )
++                            }
+                         }
+                     }
+                 )
+Index: app/src/main/java/com/stoneCode/rain_alert/repository/RadarMapRepository.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.stoneCode.rain_alert.repository\r\n\r\nimport android.content.Context\r\nimport android.util.Log\r\nimport com.google.android.gms.maps.model.LatLng\r\nimport com.stoneCode.rain_alert.api.WeatherStation\r\nimport com.stoneCode.rain_alert.data.AppConfig\r\nimport kotlinx.coroutines.Dispatchers\r\nimport kotlinx.coroutines.withContext\r\nimport okhttp3.OkHttpClient\r\nimport okhttp3.Request\r\nimport java.util.concurrent.TimeUnit\r\n\r\n/**\r\n * Repository for fetching radar map data from Weather.gov API\r\n */\r\nclass RadarMapRepository(private val context: Context) {\r\n    \r\n    private val okHttpClient = OkHttpClient.Builder()\r\n        .connectTimeout(30, TimeUnit.SECONDS)\r\n        .readTimeout(30, TimeUnit.SECONDS)\r\n        .build()\r\n    \r\n    /**\r\n     * Get precipitation radar tile URL for a specific area\r\n     * Note: Weather.gov API provides radar data as WMS tiles\r\n     */\r\n    suspend fun getPrecipitationRadarUrl(center: LatLng): Result<String> = withContext(Dispatchers.IO) {\r\n        try {\r\n            // Use the NWS WMS service for precipitation data (Quantitative Precipitation Forecast)\r\n            // See: https://digital.weather.gov/ndfd.conus/wms?REQUEST=GetCapabilities\r\n            \r\n            // Create a proper WMS request URL\r\n            // Parameters explained:\r\n            // SERVICE=WMS - The service type\r\n            // VERSION=1.3.0 - WMS version\r\n            // REQUEST=GetMap - We want a map image\r\n            // LAYERS=ndfd.conus.qpf - Quantitative Precipitation Forecast layer\r\n            // FORMAT=image/png - Image format\r\n            // TRANSPARENT=TRUE - Allow transparency\r\n            // CRS=EPSG:3857 - Coordinate reference system (Web Mercator)\r\n            // WIDTH, HEIGHT - Image dimensions\r\n            // BBOX - Bounding box coordinates\r\n            // VTIT - Valid time (current date/time formatted as 2025-03-04T00:00)\r\n            \r\n            // Use our helper function to create the WMS URL\r\n            val radarUrl = createWmsUrl(\"ndfd.conus.qpf\") // Quantitative Precipitation Forecast\r\n            \r\n            Log.d(\"RadarMapRepository\", \"Generated WMS URL: $radarUrl\")\r\n            \r\n            // Verify the URL works by making a request\r\n            val request = Request.Builder()\r\n                .url(radarUrl)\r\n                .header(\"User-Agent\", \"${AppConfig.USER_AGENT} (${AppConfig.CONTACT_EMAIL})\")\r\n                .build()\r\n            \r\n            val response = okHttpClient.newCall(request).execute()\r\n            \r\n            if (!response.isSuccessful) {\r\n                Log.e(\"RadarMapRepository\", \"Failed to verify radar URL: ${response.code}\")\r\n                return@withContext Result.failure(Exception(\"Failed to get radar data: ${response.code} - ${response.message}\"))\r\n            }\r\n            \r\n            Result.success(radarUrl)\r\n        } catch (e: Exception) {\r\n            Log.e(\"RadarMapRepository\", \"Error fetching radar data\", e)\r\n            Result.failure(e)\r\n        }\r\n    }\r\n    \r\n    /**\r\n     * Get wind speed radar tile URL for a specific area\r\n     */\r\n    suspend fun getWindRadarUrl(center: LatLng): Result<String> = withContext(Dispatchers.IO) {\r\n        try {\r\n            // Use the NWS WMS service for wind data\r\n            // See: https://digital.weather.gov/ndfd.conus/wms?REQUEST=GetCapabilities\r\n            \r\n            // Use our helper function to create the WMS URL\r\n            val windUrl = createWmsUrl(\"ndfd.conus.windspd\") // Wind Speed layer\r\n            \r\n            Log.d(\"RadarMapRepository\", \"Generated Wind WMS URL: $windUrl\")\r\n            \r\n            // Verify the URL works\r\n            val request = Request.Builder()\r\n                .url(windUrl)\r\n                .header(\"User-Agent\", \"${AppConfig.USER_AGENT} (${AppConfig.CONTACT_EMAIL})\")\r\n                .build()\r\n            \r\n            val response = okHttpClient.newCall(request).execute()\r\n            \r\n            if (!response.isSuccessful) {\r\n                Log.e(\"RadarMapRepository\", \"Failed to verify wind URL: ${response.code}\")\r\n                return@withContext Result.failure(Exception(\"Failed to get wind data: ${response.code} - ${response.message}\"))\r\n            }\r\n            \r\n            Result.success(windUrl)\r\n        } catch (e: Exception) {\r\n            Log.e(\"RadarMapRepository\", \"Error fetching wind data\", e)\r\n            Result.failure(e)\r\n        }\r\n    }\r\n    \r\n    /**\r\n     * Get temperature radar tile URL for a specific area\r\n     */\r\n    suspend fun getTemperatureRadarUrl(center: LatLng): Result<String> = withContext(Dispatchers.IO) {\r\n        try {\r\n            // Use the NWS WMS service for temperature data\r\n            // The temperature endpoint uses a slightly different URL structure\r\n            \r\n            // Format the current date for the VTIT parameter\r\n            val calendar = java.util.Calendar.getInstance()\r\n            val dateFormat = java.text.SimpleDateFormat(\"yyyy-MM-dd'T'00:00\", java.util.Locale.US)\r\n            val validTime = dateFormat.format(calendar.time)\r\n            \r\n            // Create temperature-specific URL using the working format\r\n            val temperatureUrl = \"https://digital.weather.gov/ndfd/wms?\" +\r\n                \"LAYERS=ndfd.conus.maxt\" +\r\n                \"&FORMAT=image/png\" +\r\n                \"&TRANSPARENT=TRUE\" +\r\n                \"&SEASON=0\" +\r\n                \"&VERSION=1.3.0\" +\r\n                \"&VTIT=$validTime\" +\r\n                \"&EXCEPTIONS=INIMAGE\" +\r\n                \"&SERVICE=WMS\" +\r\n                \"&REQUEST=GetMap\" +\r\n                \"&STYLES=\" +\r\n                \"&CRS=EPSG:3857\" +\r\n                \"&WIDTH=1000\" +\r\n                \"&HEIGHT=600\" +\r\n                \"&BBOX=-14200679.12,2500000,-7400000,6505689.94\"\r\n            \r\n            Log.d(\"RadarMapRepository\", \"Generated Temperature WMS URL: $temperatureUrl\")\r\n            \r\n            // Verify the URL works by making a request\r\n            val request = Request.Builder()\r\n                .url(temperatureUrl)\r\n                .header(\"User-Agent\", \"${AppConfig.USER_AGENT} (${AppConfig.CONTACT_EMAIL})\")\r\n                .build()\r\n            \r\n            val response = okHttpClient.newCall(request).execute()\r\n            \r\n            if (!response.isSuccessful) {\r\n                Log.e(\"RadarMapRepository\", \"Failed to verify temperature URL: ${response.code}\")\r\n                return@withContext Result.failure(Exception(\"Failed to get temperature data: ${response.code} - ${response.message}\"))\r\n            }\r\n            \r\n            Result.success(temperatureUrl)\r\n        } catch (e: Exception) {\r\n            Log.e(\"RadarMapRepository\", \"Error fetching temperature data\", e)\r\n            Result.failure(e)\r\n        }\r\n    }\r\n    \r\n    /**\r\n     * Generate a WMS URL for the specified layer and parameters\r\n     */\r\n    private fun createWmsUrl(\r\n        layer: String,\r\n        bbox: String = \"-14200679.12,2500000,-7400000,6505689.94\",\r\n        width: Int = 1000,\r\n        height: Int = 600\r\n    ): String {\r\n        // Format the current date for the VTIT parameter\r\n        val calendar = java.util.Calendar.getInstance()\r\n        val dateFormat = java.text.SimpleDateFormat(\"yyyy-MM-dd'T'HH:00\", java.util.Locale.US)\r\n        val validTime = dateFormat.format(calendar.time)\r\n        \r\n        return \"https://digital.weather.gov/ndfd.conus/wms?\" +\r\n            \"SERVICE=WMS\" +\r\n            \"&VERSION=1.3.0\" +\r\n            \"&REQUEST=GetMap\" +\r\n            \"&LAYERS=$layer\" +\r\n            \"&FORMAT=image/png\" +\r\n            \"&TRANSPARENT=TRUE\" +\r\n            \"&CRS=EPSG:3857\" +\r\n            \"&WIDTH=$width\" +\r\n            \"&HEIGHT=$height\" +\r\n            \"&BBOX=$bbox\" +\r\n            \"&VTIT=$validTime\"\r\n    }\r\n    \r\n    /**\r\n     * Calculate the center point and zoom level for a set of weather stations\r\n     */\r\n    fun calculateMapViewForStations(stations: List<WeatherStation>): Pair<LatLng, Float> {\r\n        // If no stations, default to center of US\r\n        if (stations.isEmpty()) {\r\n            return Pair(LatLng(40.0, -98.0), 4f)\r\n        }\r\n        \r\n        // If single station, center on it with default zoom\r\n        if (stations.size == 1) {\r\n            return Pair(\r\n                LatLng(stations[0].latitude, stations[0].longitude),\r\n                8f\r\n            )\r\n        }\r\n        \r\n        // For multiple stations, calculate the bounding box\r\n        var minLat = Double.MAX_VALUE\r\n        var maxLat = Double.MIN_VALUE\r\n        var minLng = Double.MAX_VALUE\r\n        var maxLng = Double.MIN_VALUE\r\n        \r\n        stations.forEach { station ->\r\n            minLat = minOf(minLat, station.latitude)\r\n            maxLat = maxOf(maxLat, station.latitude)\r\n            minLng = minOf(minLng, station.longitude)\r\n            maxLng = maxOf(maxLng, station.longitude)\r\n        }\r\n        \r\n        // Calculate center\r\n        val centerLat = (minLat + maxLat) / 2\r\n        val centerLng = (minLng + maxLng) / 2\r\n        \r\n        // Calculate appropriate zoom level\r\n        // Simple formula: based on the largest dimension of the bounding box\r\n        val latSpan = maxLat - minLat\r\n        val lngSpan = maxLng - minLng\r\n        val maxSpan = maxOf(latSpan, lngSpan)\r\n        \r\n        // Map span to zoom level (approximate)\r\n        val zoom = when {\r\n            maxSpan > 10.0 -> 4f\r\n            maxSpan > 5.0 -> 6f\r\n            maxSpan > 2.0 -> 7f\r\n            maxSpan > 1.0 -> 8f\r\n            maxSpan > 0.5 -> 9f\r\n            else -> 10f\r\n        }\r\n        \r\n        return Pair(LatLng(centerLat, centerLng), zoom)\r\n    }\r\n}
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/stoneCode/rain_alert/repository/RadarMapRepository.kt b/app/src/main/java/com/stoneCode/rain_alert/repository/RadarMapRepository.kt
+--- a/app/src/main/java/com/stoneCode/rain_alert/repository/RadarMapRepository.kt	(revision 53f051acc55df57f474c72f304b87499479dfe28)
++++ b/app/src/main/java/com/stoneCode/rain_alert/repository/RadarMapRepository.kt	(date 1741534706130)
+@@ -27,26 +27,11 @@
+      */
+     suspend fun getPrecipitationRadarUrl(center: LatLng): Result<String> = withContext(Dispatchers.IO) {
+         try {
+-            // Use the NWS WMS service for precipitation data (Quantitative Precipitation Forecast)
+-            // See: https://digital.weather.gov/ndfd.conus/wms?REQUEST=GetCapabilities
+-            
+-            // Create a proper WMS request URL
+-            // Parameters explained:
+-            // SERVICE=WMS - The service type
+-            // VERSION=1.3.0 - WMS version
+-            // REQUEST=GetMap - We want a map image
+-            // LAYERS=ndfd.conus.qpf - Quantitative Precipitation Forecast layer
+-            // FORMAT=image/png - Image format
+-            // TRANSPARENT=TRUE - Allow transparency
+-            // CRS=EPSG:3857 - Coordinate reference system (Web Mercator)
+-            // WIDTH, HEIGHT - Image dimensions
+-            // BBOX - Bounding box coordinates
+-            // VTIT - Valid time (current date/time formatted as 2025-03-04T00:00)
++            // Use NOAA's rain layer instead of the WMS service for more reliable data
++            // This is the fixed URL that shows current precipitation for the US
++            val radarUrl = "https://radar.weather.gov/ridge/standard/CONUS_loop.gif"
+             
+-            // Use our helper function to create the WMS URL
+-            val radarUrl = createWmsUrl("ndfd.conus.qpf") // Quantitative Precipitation Forecast
+-            
+-            Log.d("RadarMapRepository", "Generated WMS URL: $radarUrl")
++            Log.d("RadarMapRepository", "Using precipitation URL: $radarUrl")
+             
+             // Verify the URL works by making a request
+             val request = Request.Builder()
+@@ -73,13 +58,10 @@
+      */
+     suspend fun getWindRadarUrl(center: LatLng): Result<String> = withContext(Dispatchers.IO) {
+         try {
+-            // Use the NWS WMS service for wind data
+-            // See: https://digital.weather.gov/ndfd.conus/wms?REQUEST=GetCapabilities
++            // Use NOAA's wind layer instead of the WMS service for more reliable data
++            val windUrl = "https://graphical.weather.gov/images/conus/WindSpd1_conus.png"
+             
+-            // Use our helper function to create the WMS URL
+-            val windUrl = createWmsUrl("ndfd.conus.windspd") // Wind Speed layer
+-            
+-            Log.d("RadarMapRepository", "Generated Wind WMS URL: $windUrl")
++            Log.d("RadarMapRepository", "Using Wind URL: $windUrl")
+             
+             // Verify the URL works
+             val request = Request.Builder()
+@@ -106,32 +88,10 @@
+      */
+     suspend fun getTemperatureRadarUrl(center: LatLng): Result<String> = withContext(Dispatchers.IO) {
+         try {
+-            // Use the NWS WMS service for temperature data
+-            // The temperature endpoint uses a slightly different URL structure
+-            
+-            // Format the current date for the VTIT parameter
+-            val calendar = java.util.Calendar.getInstance()
+-            val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'00:00", java.util.Locale.US)
+-            val validTime = dateFormat.format(calendar.time)
++            // Use NOAA's temperature layer for more reliable data
++            val temperatureUrl = "https://graphical.weather.gov/images/conus/MaxT1_conus.png"
+             
+-            // Create temperature-specific URL using the working format
+-            val temperatureUrl = "https://digital.weather.gov/ndfd/wms?" +
+-                "LAYERS=ndfd.conus.maxt" +
+-                "&FORMAT=image/png" +
+-                "&TRANSPARENT=TRUE" +
+-                "&SEASON=0" +
+-                "&VERSION=1.3.0" +
+-                "&VTIT=$validTime" +
+-                "&EXCEPTIONS=INIMAGE" +
+-                "&SERVICE=WMS" +
+-                "&REQUEST=GetMap" +
+-                "&STYLES=" +
+-                "&CRS=EPSG:3857" +
+-                "&WIDTH=1000" +
+-                "&HEIGHT=600" +
+-                "&BBOX=-14200679.12,2500000,-7400000,6505689.94"
+-            
+-            Log.d("RadarMapRepository", "Generated Temperature WMS URL: $temperatureUrl")
++            Log.d("RadarMapRepository", "Using Temperature URL: $temperatureUrl")
+             
+             // Verify the URL works by making a request
+             val request = Request.Builder()
+Index: app/src/main/java/com/stoneCode/rain_alert/ui/MainScreen.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.stoneCode.rain_alert.ui\r\n\r\nimport androidx.compose.foundation.Image\r\nimport androidx.compose.foundation.isSystemInDarkTheme\r\nimport androidx.compose.foundation.layout.Arrangement\r\nimport androidx.compose.foundation.layout.Box\r\nimport androidx.compose.foundation.layout.Column\r\nimport androidx.compose.foundation.layout.Row\r\nimport androidx.compose.foundation.layout.Spacer\r\nimport androidx.compose.foundation.layout.fillMaxSize\r\nimport androidx.compose.foundation.layout.fillMaxWidth\r\nimport androidx.compose.foundation.layout.height\r\nimport androidx.compose.foundation.layout.padding\r\nimport androidx.compose.foundation.layout.statusBarsPadding\r\nimport androidx.compose.foundation.rememberScrollState\r\nimport androidx.compose.foundation.shape.RoundedCornerShape\r\nimport androidx.compose.foundation.verticalScroll\r\nimport androidx.compose.material.icons.Icons\r\nimport androidx.compose.material.icons.filled.History\r\nimport androidx.compose.material.icons.filled.Settings\r\nimport androidx.compose.material3.Button\r\nimport androidx.compose.material3.ButtonDefaults\r\nimport androidx.compose.material3.Card\r\nimport androidx.compose.material3.CardDefaults\r\nimport androidx.compose.material3.Icon\r\nimport androidx.compose.material3.IconButton\r\nimport androidx.compose.material3.MaterialTheme\r\nimport androidx.compose.material3.OutlinedButton\r\nimport androidx.compose.material3.Scaffold\r\nimport androidx.compose.material3.Text\r\nimport androidx.compose.runtime.Composable\r\nimport androidx.compose.runtime.DisposableEffect\r\nimport androidx.compose.runtime.LaunchedEffect\r\nimport androidx.compose.runtime.getValue\r\nimport androidx.compose.runtime.livedata.observeAsState\r\nimport androidx.compose.runtime.mutableStateOf\r\nimport androidx.compose.runtime.remember\r\nimport androidx.compose.runtime.saveable.rememberSaveable\r\nimport androidx.compose.runtime.setValue\r\nimport androidx.compose.ui.Alignment\r\nimport androidx.compose.ui.Modifier\r\nimport androidx.compose.ui.graphics.Color\r\nimport androidx.compose.ui.layout.ContentScale\r\nimport androidx.compose.ui.res.painterResource\r\nimport androidx.compose.ui.text.font.FontWeight\r\nimport androidx.compose.ui.unit.dp\r\nimport androidx.lifecycle.Lifecycle\r\nimport androidx.lifecycle.LifecycleEventObserver\r\nimport androidx.lifecycle.viewmodel.compose.viewModel\r\nimport com.StoneCode.rain_alert.R\r\nimport com.stoneCode.rain_alert.ui.dialogs.LocationDialog\r\nimport com.stoneCode.rain_alert.ui.dialogs.StationSelectDialog\r\nimport com.stoneCode.rain_alert.viewmodel.WeatherViewModel\r\nimport kotlinx.coroutines.delay\r\n\r\n@Composable\r\nfun MainScreen(\r\n    onStartServiceClick: () -> Unit,\r\n    onStopServiceClick: () -> Unit,\r\n    onOpenWeatherWebsiteClick: () -> Unit,\r\n    onSettingsClick: () -> Unit,\r\n    onViewHistoryClick: () -> Unit,\r\n    onOpenStationWebsiteClick: (String) -> Unit,  // New function to open station website\r\n    onMapClick: () -> Unit, // Function to open the weather map\r\n    weatherViewModel: WeatherViewModel = viewModel()\r\n) {\r\n    val isServiceRunning by weatherViewModel.isServiceRunning.observeAsState(false)\r\n    val lastUpdateTime by weatherViewModel.lastUpdateTime.observeAsState(\"\")\r\n    val isDataReady by weatherViewModel.isDataReady.observeAsState(false)\r\n    val stationData by weatherViewModel.stationData.observeAsState(emptyList())\r\n    var weatherData by remember { mutableStateOf(\"Loading...\") }\r\n    var isRefreshing by remember { mutableStateOf(false) }\r\n    var longPressDetected by remember { mutableStateOf(false) }\r\n    var initialContainerSize by remember { mutableStateOf(0.dp) }\r\n\r\n    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current\r\n    DisposableEffect(lifecycleOwner) {\r\n        val observer = LifecycleEventObserver { _, event ->\r\n            if (event == Lifecycle.Event.ON_RESUME) {\r\n                weatherViewModel.updateWeatherStatus()\r\n            }\r\n        }\r\n        lifecycleOwner.lifecycle.addObserver(observer)\r\n        onDispose {\r\n            lifecycleOwner.lifecycle.removeObserver(observer)\r\n            weatherViewModel.stopServiceChecker()\r\n        }\r\n    }\r\n\r\n    LaunchedEffect(weatherViewModel.weatherData, isRefreshing, isDataReady) {\r\n        weatherViewModel.weatherData.value?.let { data ->\r\n            if (!isRefreshing) {\r\n                weatherData = data\r\n            } else {\r\n                if (!longPressDetected) {\r\n                    delay(500)\r\n                }\r\n\r\n                if (isDataReady) {\r\n                    weatherData = data\r\n                    isRefreshing = false\r\n                    longPressDetected = false\r\n                }\r\n            }\r\n        }\r\n    }\r\n\r\n    Scaffold(\r\n        modifier = Modifier.fillMaxSize(),\r\n        topBar = {\r\n            Row(\r\n                modifier = Modifier\r\n                    .fillMaxWidth()\r\n                    .statusBarsPadding() // This will add necessary padding for status bar\r\n                    .padding(horizontal = 16.dp, vertical = 8.dp),\r\n                horizontalArrangement = Arrangement.SpaceBetween,\r\n                verticalAlignment = Alignment.CenterVertically\r\n            ) {\r\n                // App Title\r\n                AppTitle(compact = true)\r\n                \r\n                // Navigation icons\r\n                Row {\r\n                    IconButton(onClick = onViewHistoryClick) {\r\n                        Icon(\r\n                            imageVector = Icons.Default.History,\r\n                            contentDescription = \"View Alert History\",\r\n                            tint = if (isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.onPrimary\r\n                        )\r\n                    }\r\n                    IconButton(onClick = onSettingsClick) {\r\n                        Icon(\r\n                            imageVector = Icons.Default.Settings,\r\n                            contentDescription = \"Settings\",\r\n                            tint = if (isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.onPrimary\r\n                        )\r\n                    }\r\n                }\r\n            }\r\n        },\r\n        content = { innerPadding ->\r\n            Box(modifier = Modifier.fillMaxSize()) {\r\n                // Background Image - Choose based on dark mode\r\n                val backgroundResId = if (isSystemInDarkTheme()) {\r\n                    R.drawable.background_nature_dark\r\n                } else {\r\n                    R.drawable.background_nature\r\n                }\r\n                \r\n                Image(\r\n                    painter = painterResource(id = backgroundResId),\r\n                    contentDescription = null,\r\n                    modifier = Modifier.fillMaxSize(),\r\n                    contentScale = ContentScale.Crop\r\n                )\r\n\r\n                Column(\r\n                    modifier = Modifier\r\n                        .fillMaxSize()\r\n                        .padding(innerPadding)\r\n                        .verticalScroll(rememberScrollState()),\r\n                    horizontalAlignment = Alignment.CenterHorizontally,\r\n                    verticalArrangement = Arrangement.spacedBy(16.dp)\r\n                ) {\r\n                    Spacer(modifier = Modifier.height(8.dp))\r\n                    \r\n                    // Weather Carousel - Includes Weather, Radar, and Station data\r\n                    var showLocationDialog by rememberSaveable { mutableStateOf(false) }\r\n                    var showStationSelectDialog by rememberSaveable { mutableStateOf(false) }\r\n                    val availableStations by weatherViewModel.availableStations.observeAsState(emptyList())\r\n                    val selectedStationIds by weatherViewModel.selectedStationIds.observeAsState(emptyList())\r\n                    \r\n                    // Launch effect to fetch fresh stations when dialog is about to show\r\n                    LaunchedEffect(showStationSelectDialog) {\r\n                        if (showStationSelectDialog) {\r\n                            // Fetch fresh stations when dialog opens\r\n                            weatherViewModel.fetchAvailableStations()\r\n                        }\r\n                    }\r\n                    \r\n                    // Filter stationData to only include selected stations\r\n                    val displayedStations = stationData.filter { stationObs ->\r\n                        selectedStationIds.contains(stationObs.station.id)\r\n                    }\r\n                    \r\n                    // Weather Carousel\r\n                    WeatherCarousel(\r\n                        weatherData = weatherData,\r\n                        lastUpdateTime = lastUpdateTime,\r\n                        isRefreshing = isRefreshing,\r\n                        longPressDetected = longPressDetected,\r\n                        onLongPress = {\r\n                            longPressDetected = true\r\n                            isRefreshing = true\r\n                            weatherViewModel.updateWeatherStatus()\r\n                        },\r\n                        weatherViewModel = weatherViewModel,\r\n                        onSizeCalculated = { size ->\r\n                            if (initialContainerSize < size) {\r\n                                initialContainerSize = size\r\n                            }\r\n                        },\r\n                        containerSize = initialContainerSize,\r\n                        stationData = displayedStations,\r\n                        onChangeLocationClick = { showLocationDialog = true },\r\n                        onSelectStationsClick = { showStationSelectDialog = true },\r\n                        onStationLongClick = onOpenStationWebsiteClick\r\n                    )\r\n                    \r\n                    // Location Dialog\r\n                    if (showLocationDialog) {\r\n                        LocationDialog(\r\n                            onDismiss = { showLocationDialog = false },\r\n                            onConfirm = { zipCode ->\r\n                                weatherViewModel.updateCustomLocation(zipCode, true)\r\n                                showLocationDialog = false\r\n                            },\r\n                            onUseDeviceLocation = {\r\n                                weatherViewModel.updateCustomLocation(null, false)\r\n                                showLocationDialog = false\r\n                            }\r\n                        )\r\n                    }\r\n                    \r\n                    // Station Select Dialog\r\n                    if (showStationSelectDialog) {\r\n                        StationSelectDialog(\r\n                            stations = availableStations,\r\n                            selectedStationIds = selectedStationIds,\r\n                            onDismiss = { showStationSelectDialog = false },\r\n                            onConfirm = { stationIds ->\r\n                                weatherViewModel.updateSelectedStations(stationIds)\r\n                                showStationSelectDialog = false\r\n                            }\r\n                        )\r\n                    }\r\n\r\n                    // Control Buttons Section - Simplified for service control only\r\n                    Card(\r\n                        modifier = Modifier\r\n                            .fillMaxWidth()\r\n                            .padding(horizontal = 16.dp),\r\n                        shape = RoundedCornerShape(12.dp),\r\n                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)\r\n                    ) {\r\n                        Column(modifier = Modifier.padding(16.dp)) {\r\n                            Text(\r\n                                text = \"Service Control\",\r\n                                style = MaterialTheme.typography.titleMedium,\r\n                                fontWeight = FontWeight.Bold\r\n                            )\r\n                            Spacer(modifier = Modifier.height(8.dp))\r\n                            Button(\r\n                                onClick = if (isServiceRunning) onStopServiceClick else onStartServiceClick,\r\n                                modifier = Modifier.fillMaxWidth(),\r\n                                colors = ButtonDefaults.buttonColors(\r\n                                    containerColor = if (isServiceRunning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary\r\n                                )\r\n                            ) {\r\n                                Text(if (isServiceRunning) \"Stop Weather Alerts\" else \"Start Weather Alerts\")\r\n                            }\r\n                            Spacer(modifier = Modifier.height(8.dp))\r\n                            OutlinedButton(\r\n                                onClick = onOpenWeatherWebsiteClick,\r\n                                modifier = Modifier.fillMaxWidth()\r\n                            ) {\r\n                                Text(\"Open Weather Website\")\r\n                            }\r\n                            Spacer(modifier = Modifier.height(8.dp))\r\n                            OutlinedButton(\r\n                                onClick = onMapClick,\r\n                                modifier = Modifier.fillMaxWidth()\r\n                            ) {\r\n                                Text(\"Open Weather Map\")\r\n                            }\r\n                        }\r\n                    }\r\n                    \r\n                    // Add space at the bottom for better scrolling\r\n                    Spacer(modifier = Modifier.height(80.dp))\r\n                }\r\n            }\r\n        }\r\n    )\r\n}
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/stoneCode/rain_alert/ui/MainScreen.kt b/app/src/main/java/com/stoneCode/rain_alert/ui/MainScreen.kt
+--- a/app/src/main/java/com/stoneCode/rain_alert/ui/MainScreen.kt	(revision 53f051acc55df57f474c72f304b87499479dfe28)
++++ b/app/src/main/java/com/stoneCode/rain_alert/ui/MainScreen.kt	(date 1741534550157)
+@@ -17,6 +17,7 @@
+ import androidx.compose.foundation.verticalScroll
+ import androidx.compose.material.icons.Icons
+ import androidx.compose.material.icons.filled.History
++import androidx.compose.material.icons.filled.Info
+ import androidx.compose.material.icons.filled.Settings
+ import androidx.compose.material3.Button
+ import androidx.compose.material3.ButtonDefaults
+@@ -24,10 +25,12 @@
+ import androidx.compose.material3.CardDefaults
+ import androidx.compose.material3.Icon
+ import androidx.compose.material3.IconButton
++import androidx.compose.material3.AlertDialog
+ import androidx.compose.material3.MaterialTheme
+ import androidx.compose.material3.OutlinedButton
+ import androidx.compose.material3.Scaffold
+ import androidx.compose.material3.Text
++import androidx.compose.material3.TextButton
+ import androidx.compose.runtime.Composable
+ import androidx.compose.runtime.DisposableEffect
+ import androidx.compose.runtime.LaunchedEffect
+@@ -72,6 +75,7 @@
+     var isRefreshing by remember { mutableStateOf(false) }
+     var longPressDetected by remember { mutableStateOf(false) }
+     var initialContainerSize by remember { mutableStateOf(0.dp) }
++    var showInfoDialog by remember { mutableStateOf(false) }
+ 
+     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+     DisposableEffect(lifecycleOwner) {
+@@ -121,6 +125,13 @@
+                 
+                 // Navigation icons
+                 Row {
++                    IconButton(onClick = { showInfoDialog = true }) {
++                        Icon(
++                            imageVector = Icons.Default.Info,
++                            contentDescription = "App Information",
++                            tint = if (isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.onPrimary
++                        )
++                    }
+                     IconButton(onClick = onViewHistoryClick) {
+                         Icon(
+                             imageVector = Icons.Default.History,
+@@ -282,4 +293,50 @@
+             }
+         }
+     )
++    
++    // App Info Dialog
++    if (showInfoDialog) {
++        AlertDialog(
++            onDismissRequest = { showInfoDialog = false },
++            title = { Text("About Rain Alert") },
++            text = {
++                Column {
++                    Text("Rain Alert monitors weather conditions from multiple nearby weather stations to provide accurate, timely alerts about rain and freezing conditions at your location.")
++                    Spacer(modifier = Modifier.height(12.dp))
++                    Text("Unlike general weather apps, Rain Alert specializes in notifying you about imminent precipitation or freezing conditions using data from at least three local weather stations.")
++                    Spacer(modifier = Modifier.height(12.dp))
++                    Text("For best results, ensure the app has:")
++                    Text("• Location permissions enabled")
++                    Text("• Battery optimization disabled")
++                    Text("• Auto-start enabled (if available on your device)")
++                    Spacer(modifier = Modifier.height(12.dp))
++                    Text("To adjust these settings, please check your device's app permissions and battery settings.")
++                }
++            },
++            confirmButton = {
++                TextButton(
++                    onClick = {
++                        showInfoDialog = false
++                        // Open App Settings
++                        val intent = android.content.Intent(
++                            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS
++                        ).apply {
++                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
++                            val uri = android.net.Uri.fromParts("package", 
++                                androidx.compose.ui.platform.LocalContext.current.packageName, null)
++                            data = uri
++                        }
++                        androidx.compose.ui.platform.LocalContext.current.startActivity(intent)
++                    }
++                ) {
++                    Text("Open App Settings")
++                }
++            },
++            dismissButton = {
++                TextButton(onClick = { showInfoDialog = false }) {
++                    Text("Close")
++                }
++            }
++        )
++    }
+ }
+\ No newline at end of file
+Index: app/src/main/java/com/stoneCode/rain_alert/ui/map/WeatherMapScreen.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.stoneCode.rain_alert.ui.map\r\n\r\nimport android.util.Log\r\nimport androidx.compose.foundation.layout.*\r\nimport androidx.compose.material3.*\r\nimport androidx.compose.runtime.*\r\nimport androidx.compose.ui.Modifier\r\nimport androidx.compose.ui.Alignment\r\nimport androidx.compose.ui.graphics.Color\r\nimport androidx.compose.ui.unit.dp\r\nimport androidx.compose.material.icons.Icons\r\nimport androidx.compose.material.icons.filled.Refresh\r\nimport androidx.compose.material.icons.filled.WaterDrop\r\nimport androidx.compose.material.icons.filled.AirplanemodeActive\r\nimport androidx.compose.material.icons.filled.MyLocation\r\nimport androidx.compose.material.icons.filled.Thermostat\r\nimport androidx.compose.runtime.livedata.observeAsState\r\nimport androidx.lifecycle.viewmodel.compose.viewModel\r\nimport com.google.android.gms.maps.CameraUpdateFactory\r\nimport com.google.android.gms.maps.model.*\r\nimport com.google.maps.android.compose.*\r\nimport com.stoneCode.rain_alert.api.WeatherStation\r\nimport com.stoneCode.rain_alert.viewmodel.RadarMapViewModel\r\nimport kotlinx.coroutines.launch\r\n\r\n/**\r\n * A weather map component that shows current weather data overlays and station information.\r\n * Simplified to focus on current weather conditions without forecast features.\r\n */\r\n@OptIn(ExperimentalMaterial3Api::class)\r\n@Composable\r\nfun WeatherMapScreen(\r\n    modifier: Modifier = Modifier,\r\n    centerLatLng: LatLng = LatLng(40.0, -98.0),\r\n    myLocation: LatLng? = null,\r\n    selectedStations: List<WeatherStation> = emptyList(),\r\n    isLoading: Boolean = false,\r\n    onRefresh: () -> Unit = {},\r\n    onMyLocationClick: () -> Unit = {},\r\n    radarMapViewModel: RadarMapViewModel = viewModel()\r\n) {\r\n    val coroutineScope = rememberCoroutineScope()\r\n    \r\n    // State\r\n    var showPrecipitationLayer by remember { mutableStateOf(true) }\r\n    var showWindLayer by remember { mutableStateOf(false) }\r\n    var showTemperatureLayer by remember { mutableStateOf(false) }\r\n    var selectedStation by remember { mutableStateOf<WeatherStation?>(null) }\r\n    \r\n    // Observe data from ViewModel\r\n    val precipitationRadarUrl by radarMapViewModel.precipitationRadarUrl.observeAsState()\r\n    val windRadarUrl by radarMapViewModel.windRadarUrl.observeAsState()\r\n    val temperatureRadarUrl by radarMapViewModel.temperatureRadarUrl.observeAsState()\r\n    val isRadarLoading by radarMapViewModel.isLoading.observeAsState(false)\r\n    \r\n    // Map camera state (with default position)\r\n    val cameraPositionState = rememberCameraPositionState {\r\n        position = CameraPosition.fromLatLngZoom(myLocation ?: centerLatLng, 9f)\r\n    }\r\n    \r\n    // Initialize map at user location if available\r\n    val initialized = remember { mutableStateOf(false) }\r\n    LaunchedEffect(myLocation) {\r\n        if (!initialized.value && myLocation != null) {\r\n            cameraPositionState.position = CameraPosition.fromLatLngZoom(myLocation, 12f)\r\n            radarMapViewModel.updateMapCenter(myLocation)\r\n            initialized.value = true\r\n        }\r\n    }\r\n    \r\n    // Track camera position changes\r\n    LaunchedEffect(cameraPositionState.isMoving) {\r\n        if (!cameraPositionState.isMoving && initialized.value) {\r\n            radarMapViewModel.updateMapCenter(cameraPositionState.position.target)\r\n        }\r\n    }\r\n    \r\n    Column(modifier = modifier.fillMaxSize()) {\r\n        // Top Bar with title\r\n        TopAppBar(\r\n            title = { Text(\"Current Weather\") }\r\n        )\r\n        \r\n        // Weather layer controls\r\n        WeatherControls(\r\n            onPrecipitationToggle = { showPrecipitationLayer = !showPrecipitationLayer },\r\n            onWindLayerToggle = { showWindLayer = !showWindLayer },\r\n            onTemperatureToggle = { showTemperatureLayer = !showTemperatureLayer },\r\n            showPrecipitationLayer = showPrecipitationLayer,\r\n            showWindLayer = showWindLayer,\r\n            showTemperatureLayer = showTemperatureLayer,\r\n            modifier = Modifier.padding(8.dp)\r\n        )\r\n        \r\n        // Loading indicator\r\n        if (isLoading || isRadarLoading) {\r\n            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())\r\n        }\r\n        \r\n        // Map with weather overlays\r\n        Box(modifier = Modifier.weight(1f)) {\r\n            GoogleMap(\r\n                modifier = Modifier.fillMaxSize(),\r\n                cameraPositionState = cameraPositionState,\r\n                properties = MapProperties(\r\n                    mapType = MapType.TERRAIN,\r\n                    isMyLocationEnabled = myLocation != null\r\n                ),\r\n                uiSettings = MapUiSettings(\r\n                    zoomControlsEnabled = false,\r\n                    myLocationButtonEnabled = false,\r\n                    mapToolbarEnabled = false\r\n                ),\r\n                onMapLoaded = {\r\n                    Log.d(\"WeatherMapScreen\", \"Map loaded\")\r\n                    if (myLocation != null && !initialized.value) {\r\n                        radarMapViewModel.updateMapCenter(myLocation)\r\n                        initialized.value = true\r\n                    }\r\n                }\r\n            ) {\r\n                // Temperature overlay (lowest z-index so it appears below other layers)\r\n                if (showTemperatureLayer && temperatureRadarUrl != null) {\r\n                    WeatherOverlay(\r\n                        imageUrl = temperatureRadarUrl,\r\n                        visible = true,\r\n                        transparency = 0.4f,\r\n                        zIndex = 0f\r\n                    )\r\n                }\r\n                \r\n                // Precipitation overlay (middle z-index)\r\n                if (showPrecipitationLayer && precipitationRadarUrl != null) {\r\n                    WeatherOverlay(\r\n                        imageUrl = precipitationRadarUrl,\r\n                        visible = true,\r\n                        transparency = 0.3f,\r\n                        zIndex = 1f\r\n                    )\r\n                }\r\n                \r\n                // Wind overlay (highest z-index so it appears on top)\r\n                if (showWindLayer && windRadarUrl != null) {\r\n                    WeatherOverlay(\r\n                        imageUrl = windRadarUrl,\r\n                        visible = true,\r\n                        transparency = 0.4f,\r\n                        zIndex = 2f\r\n                    )\r\n                }\r\n                \r\n                // Display weather station markers\r\n                selectedStations.forEach { station ->\r\n                    Marker(\r\n                        state = MarkerState(position = LatLng(station.latitude, station.longitude)),\r\n                        title = station.name,\r\n                        snippet = \"Distance: ${String.format(\"%.1f\", station.distance)} km\",\r\n                        icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED),\r\n                        onClick = {\r\n                            selectedStation = station\r\n                            true\r\n                        }\r\n                    )\r\n                }\r\n                \r\n                // User location marker\r\n                myLocation?.let { location ->\r\n                    Circle(\r\n                        center = location,\r\n                        radius = 500.0, // 500 meters\r\n                        fillColor = Color.Blue.copy(alpha = 0.15f),\r\n                        strokeColor = Color.Blue.copy(alpha = 0.8f),\r\n                        strokeWidth = 2f\r\n                    )\r\n                }\r\n            }\r\n            \r\n            // Map control buttons\r\n            Box(\r\n                modifier = Modifier\r\n                    .align(Alignment.TopEnd)\r\n                    .padding(top = 16.dp, end = 16.dp)\r\n            ) {\r\n                Column(\r\n                    verticalArrangement = Arrangement.spacedBy(8.dp)\r\n                ) {\r\n                    // My location button\r\n                    FloatingActionButton(\r\n                        onClick = {\r\n                            onMyLocationClick()\r\n                            myLocation?.let { loc ->\r\n                                coroutineScope.launch {\r\n                                    cameraPositionState.animate(\r\n                                        CameraUpdateFactory.newCameraPosition(\r\n                                            CameraPosition(loc, 12f, 0f, 0f)\r\n                                        ),\r\n                                        1000\r\n                                    )\r\n                                }\r\n                            }\r\n                        },\r\n                        modifier = Modifier.size(40.dp),\r\n                        containerColor = MaterialTheme.colorScheme.primaryContainer\r\n                    ) {\r\n                        Icon(\r\n                            imageVector = Icons.Default.MyLocation,\r\n                            contentDescription = \"My Location\",\r\n                            tint = MaterialTheme.colorScheme.onPrimaryContainer\r\n                        )\r\n                    }\r\n                    \r\n                    // Refresh button\r\n                    FloatingActionButton(\r\n                        onClick = onRefresh,\r\n                        modifier = Modifier.size(40.dp),\r\n                        containerColor = MaterialTheme.colorScheme.primaryContainer\r\n                    ) {\r\n                        Icon(\r\n                            imageVector = Icons.Default.Refresh,\r\n                            contentDescription = \"Refresh\",\r\n                            tint = MaterialTheme.colorScheme.onPrimaryContainer\r\n                        )\r\n                    }\r\n                }\r\n            }\r\n        }\r\n        \r\n        // Station info dialog\r\n        if (selectedStation != null) {\r\n            AlertDialog(\r\n                onDismissRequest = { selectedStation = null },\r\n                title = { Text(text = selectedStation!!.name) },\r\n                text = {\r\n                    Column {\r\n                        Text(\"Distance: ${String.format(\"%.1f\", selectedStation!!.distance)} km\")\r\n                        Spacer(modifier = Modifier.height(4.dp))\r\n                        selectedStation?.stationUrl?.let { url ->\r\n                            if (url.isNotEmpty()) {\r\n                                Text(\"Station URL: $url\")\r\n                            }\r\n                        }\r\n                    }\r\n                },\r\n                confirmButton = {\r\n                    TextButton(onClick = { selectedStation = null }) {\r\n                        Text(\"Close\")\r\n                    }\r\n                }\r\n            )\r\n        }\r\n    }\r\n}\r\n\r\n/**\r\n * Weather layer control chips for toggling different weather data layers.\r\n */\r\n@Composable\r\nfun WeatherControls(\r\n    onPrecipitationToggle: () -> Unit,\r\n    onWindLayerToggle: () -> Unit,\r\n    onTemperatureToggle: () -> Unit,\r\n    showPrecipitationLayer: Boolean,\r\n    showWindLayer: Boolean,\r\n    showTemperatureLayer: Boolean,\r\n    modifier: Modifier = Modifier\r\n) {\r\n    Row(\r\n        modifier = modifier.fillMaxWidth(),\r\n        horizontalArrangement = Arrangement.spacedBy(8.dp)\r\n    ) {\r\n        // Precipitation layer toggle\r\n        FilterChip(\r\n            selected = showPrecipitationLayer,\r\n            onClick = onPrecipitationToggle,\r\n            label = { Text(\"Precipitation\") },\r\n            leadingIcon = {\r\n                Icon(\r\n                    Icons.Default.WaterDrop,\r\n                    contentDescription = null,\r\n                    tint = if (showPrecipitationLayer) MaterialTheme.colorScheme.primary else Color.Gray\r\n                )\r\n            }\r\n        )\r\n        \r\n        // Wind layer toggle\r\n        FilterChip(\r\n            selected = showWindLayer,\r\n            onClick = onWindLayerToggle,\r\n            label = { Text(\"Wind\") },\r\n            leadingIcon = {\r\n                Icon(\r\n                    Icons.Default.AirplanemodeActive,\r\n                    contentDescription = null,\r\n                    tint = if (showWindLayer) MaterialTheme.colorScheme.primary else Color.Gray\r\n                )\r\n            }\r\n        )\r\n        \r\n        // Temperature layer toggle\r\n        FilterChip(\r\n            selected = showTemperatureLayer,\r\n            onClick = onTemperatureToggle,\r\n            label = { Text(\"Temperature\") },\r\n            leadingIcon = {\r\n                Icon(\r\n                    Icons.Default.Thermostat,\r\n                    contentDescription = null,\r\n                    tint = if (showTemperatureLayer) MaterialTheme.colorScheme.primary else Color.Gray\r\n                )\r\n            }\r\n        )\r\n    }\r\n}\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/stoneCode/rain_alert/ui/map/WeatherMapScreen.kt b/app/src/main/java/com/stoneCode/rain_alert/ui/map/WeatherMapScreen.kt
+--- a/app/src/main/java/com/stoneCode/rain_alert/ui/map/WeatherMapScreen.kt	(revision 53f051acc55df57f474c72f304b87499479dfe28)
++++ b/app/src/main/java/com/stoneCode/rain_alert/ui/map/WeatherMapScreen.kt	(date 1741534457244)
+@@ -76,9 +76,24 @@
+     }
+     
+     Column(modifier = modifier.fillMaxSize()) {
+-        // Top Bar with title
++        // Top Bar with title and back button
+         TopAppBar(
+-            title = { Text("Current Weather") }
++            title = { Text("Current Weather") },
++            navigationIcon = {
++                IconButton(onClick = {
++                    // Navigate back when back button is pressed
++                    androidx.compose.ui.platform.LocalContext.current.let { context ->
++                        if (context is androidx.activity.ComponentActivity) {
++                            context.finish()
++                        }
++                    }
++                }) {
++                    Icon(
++                        imageVector = androidx.compose.material.icons.Icons.Default.ArrowBack,
++                        contentDescription = "Back"
++                    )
++                }
++            }
+         )
+         
+         // Weather layer controls
+@@ -104,11 +119,11 @@
+                 cameraPositionState = cameraPositionState,
+                 properties = MapProperties(
+                     mapType = MapType.TERRAIN,
+-                    isMyLocationEnabled = myLocation != null
++                    isMyLocationEnabled = true  // Always enable this for better UX
+                 ),
+                 uiSettings = MapUiSettings(
+-                    zoomControlsEnabled = false,
+-                    myLocationButtonEnabled = false,
++                    zoomControlsEnabled = true,  // Enable zoom controls for easier navigation
++                    myLocationButtonEnabled = false,  // We're using our custom button instead
+                     mapToolbarEnabled = false
+                 ),
+                 onMapLoaded = {
+@@ -117,6 +132,8 @@
+                         radarMapViewModel.updateMapCenter(myLocation)
+                         initialized.value = true
+                     }
++                    // Request fresh radar data when map is loaded
++                    radarMapViewModel.fetchRadarData(cameraPositionState.position.target)
+                 }
+             ) {
+                 // Temperature overlay (lowest z-index so it appears below other layers)
+@@ -187,15 +204,40 @@
+                     // My location button
+                     FloatingActionButton(
+                         onClick = {
++                            // First ensure permissions are granted
+                             onMyLocationClick()
+-                            myLocation?.let { loc ->
+-                                coroutineScope.launch {
+-                                    cameraPositionState.animate(
+-                                        CameraUpdateFactory.newCameraPosition(
+-                                            CameraPosition(loc, 12f, 0f, 0f)
+-                                        ),
+-                                        1000
+-                                    )
++                            
++                            // Try to get location from the repository
++                            val locationProvider = com.stoneCode.rain_alert.repository.WeatherRepository(
++                                androidx.compose.ui.platform.LocalContext.current
++                            )
++                            val currentLocation = locationProvider.getLastKnownLocation()
++                            
++                            if (currentLocation != null) {
++                                // We have a location, animate to it
++                                val latLng = LatLng(currentLocation.latitude, currentLocation.longitude)
++                                coroutineScope.launch {
++                                    cameraPositionState.animate(
++                                        CameraUpdateFactory.newCameraPosition(
++                                            CameraPosition(latLng, 12f, 0f, 0f)
++                                        ),
++                                        1000
++                                    )
++                                    // Update radar data after moving
++                                    radarMapViewModel.updateMapCenter(latLng)
++                                    radarMapViewModel.fetchRadarData(latLng)
++                                }
++                            } else {
++                                // If myLocation was provided in props, use that as fallback
++                                myLocation?.let { loc ->
++                                    coroutineScope.launch {
++                                        cameraPositionState.animate(
++                                            CameraUpdateFactory.newCameraPosition(
++                                                CameraPosition(loc, 12f, 0f, 0f)
++                                            ),
++                                            1000
++                                        )
++                                    }
+                                 }
+                             }
+                         },
+Index: app/src/main/java/com/stoneCode/rain_alert/viewmodel/RadarMapViewModel.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.stoneCode.rain_alert.viewmodel\r\n\r\nimport android.app.Application\r\nimport android.util.Log\r\nimport androidx.lifecycle.AndroidViewModel\r\nimport androidx.lifecycle.LiveData\r\nimport androidx.lifecycle.MutableLiveData\r\nimport androidx.lifecycle.viewModelScope\r\nimport com.google.android.gms.maps.model.LatLng\r\nimport com.stoneCode.rain_alert.api.WeatherStation\r\nimport com.stoneCode.rain_alert.repository.RadarMapRepository\r\nimport kotlinx.coroutines.launch\r\n\r\n/**\r\n * ViewModel for the radar map screen.\r\n * Simplified to focus on current weather data without forecast features.\r\n */\r\nclass RadarMapViewModel(application: Application) : AndroidViewModel(application) {\r\n    \r\n    private val radarMapRepository = RadarMapRepository(application)\r\n    \r\n    // Map center and zoom\r\n    private val _mapCenter = MutableLiveData<LatLng>(LatLng(40.0, -98.0)) // Default to center of US\r\n    val mapCenter: LiveData<LatLng> = _mapCenter\r\n    \r\n    private val _mapZoom = MutableLiveData<Float>(4f)\r\n    val mapZoom: LiveData<Float> = _mapZoom\r\n    \r\n    // Selected stations\r\n    private val _selectedStations = MutableLiveData<List<WeatherStation>>(emptyList())\r\n    val selectedStations: LiveData<List<WeatherStation>> = _selectedStations\r\n    \r\n    // Current weather layer URLs\r\n    private val _precipitationRadarUrl = MutableLiveData<String>()\r\n    val precipitationRadarUrl: LiveData<String> = _precipitationRadarUrl\r\n    \r\n    private val _windRadarUrl = MutableLiveData<String>()\r\n    val windRadarUrl: LiveData<String> = _windRadarUrl\r\n    \r\n    private val _temperatureRadarUrl = MutableLiveData<String>()\r\n    val temperatureRadarUrl: LiveData<String> = _temperatureRadarUrl\r\n    \r\n    private val _showTemperatureLayer = MutableLiveData<Boolean>(false)\r\n    val showTemperatureLayer: LiveData<Boolean> = _showTemperatureLayer\r\n    \r\n    // Loading state\r\n    private val _isLoading = MutableLiveData<Boolean>(false)\r\n    val isLoading: LiveData<Boolean> = _isLoading\r\n    \r\n    // Error handling\r\n    private val _errorMessage = MutableLiveData<String?>(null)\r\n    val errorMessage: LiveData<String?> = _errorMessage\r\n    \r\n    /**\r\n     * Update the selected stations and recalculate map view\r\n     */\r\n    fun updateSelectedStations(stations: List<WeatherStation>) {\r\n        _selectedStations.value = stations\r\n        \r\n        if (stations.isNotEmpty()) {\r\n            val (center, zoom) = radarMapRepository.calculateMapViewForStations(stations)\r\n            _mapCenter.value = center\r\n            _mapZoom.value = zoom\r\n            \r\n            // Fetch radar data for the new center\r\n            fetchRadarData(center)\r\n        }\r\n    }\r\n    \r\n    /**\r\n     * Fetch current radar data for all weather layers\r\n     */\r\n    fun fetchRadarData(center: LatLng = _mapCenter.value ?: LatLng(40.0, -98.0)) {\r\n        viewModelScope.launch {\r\n            _isLoading.value = true\r\n            _errorMessage.value = null\r\n            \r\n            try {\r\n                // Fetch precipitation radar\r\n                radarMapRepository.getPrecipitationRadarUrl(center).fold(\r\n                    onSuccess = { url ->\r\n                        _precipitationRadarUrl.value = url\r\n                    },\r\n                    onFailure = { error ->\r\n                        _errorMessage.value = \"Failed to load precipitation data: ${error.message}\"\r\n                    }\r\n                )\r\n                \r\n                // Fetch wind radar\r\n                radarMapRepository.getWindRadarUrl(center).fold(\r\n                    onSuccess = { url ->\r\n                        _windRadarUrl.value = url\r\n                    },\r\n                    onFailure = { error ->\r\n                        // Don't override previous error message if there was one\r\n                        if (_errorMessage.value == null) {\r\n                            _errorMessage.value = \"Failed to load wind data: ${error.message}\"\r\n                        }\r\n                    }\r\n                )\r\n                \r\n                // Fetch temperature data\r\n                radarMapRepository.getTemperatureRadarUrl(center).fold(\r\n                    onSuccess = { url ->\r\n                        _temperatureRadarUrl.value = url\r\n                        Log.d(\"RadarMapViewModel\", \"Loaded temperature data: $url\")\r\n                    },\r\n                    onFailure = { error ->\r\n                        Log.e(\"RadarMapViewModel\", \"Error fetching temperature data: ${error.message}\")\r\n                        // Don't override previous error messages\r\n                    }\r\n                )\r\n            } catch (e: Exception) {\r\n                _errorMessage.value = \"Error loading radar data: ${e.message}\"\r\n                Log.e(\"RadarMapViewModel\", \"Error loading radar data\", e)\r\n            } finally {\r\n                _isLoading.value = false\r\n            }\r\n        }\r\n    }\r\n    \r\n    /**\r\n     * Update map center\r\n     */\r\n    fun updateMapCenter(center: LatLng) {\r\n        _mapCenter.value = center\r\n    }\r\n    \r\n    /**\r\n     * Update map zoom level\r\n     */\r\n    fun updateMapZoom(zoom: Float) {\r\n        _mapZoom.value = zoom\r\n    }\r\n    \r\n    /**\r\n     * Toggle temperature layer visibility\r\n     */\r\n    fun toggleTemperatureLayer() {\r\n        val currentValue = _showTemperatureLayer.value ?: false\r\n        _showTemperatureLayer.value = !currentValue\r\n        \r\n        // Fetch temperature data if it's now enabled but we don't have data yet\r\n        if (!currentValue && _temperatureRadarUrl.value == null) {\r\n            fetchTemperatureData()\r\n        }\r\n    }\r\n    \r\n    /**\r\n     * Fetch temperature data specifically\r\n     */\r\n    private fun fetchTemperatureData() {\r\n        viewModelScope.launch {\r\n            try {\r\n                val center = _mapCenter.value ?: LatLng(40.0, -98.0)\r\n                \r\n                radarMapRepository.getTemperatureRadarUrl(center).fold(\r\n                    onSuccess = { url ->\r\n                        _temperatureRadarUrl.value = url\r\n                        Log.d(\"RadarMapViewModel\", \"Loaded temperature data: $url\")\r\n                    },\r\n                    onFailure = { error ->\r\n                        Log.e(\"RadarMapViewModel\", \"Error fetching temperature data: ${error.message}\")\r\n                    }\r\n                )\r\n            } catch (e: Exception) {\r\n                Log.e(\"RadarMapViewModel\", \"Error loading temperature data\", e)\r\n            }\r\n        }\r\n    }\r\n    \r\n    /**\r\n     * Refresh all weather data\r\n     */\r\n    fun refreshRadarData() {\r\n        _mapCenter.value?.let { center ->\r\n            fetchRadarData(center)\r\n        }\r\n    }\r\n}
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/stoneCode/rain_alert/viewmodel/RadarMapViewModel.kt b/app/src/main/java/com/stoneCode/rain_alert/viewmodel/RadarMapViewModel.kt
+--- a/app/src/main/java/com/stoneCode/rain_alert/viewmodel/RadarMapViewModel.kt	(revision 53f051acc55df57f474c72f304b87499479dfe28)
++++ b/app/src/main/java/com/stoneCode/rain_alert/viewmodel/RadarMapViewModel.kt	(date 1741534646165)
+@@ -1,4 +1,7 @@
+-package com.stoneCode.rain_alert.viewmodel
++    init {
++        // Initialize by fetching radar data right away
++        fetchRadarData()
++    }package com.stoneCode.rain_alert.viewmodel
+ 
+ import android.app.Application
+ import android.util.Log
+@@ -51,6 +54,11 @@
+     private val _errorMessage = MutableLiveData<String?>(null)
+     val errorMessage: LiveData<String?> = _errorMessage
+     
++    init {
++        // Initialize by fetching radar data right away
++        fetchRadarData()
++    }
++    
+     /**
+      * Update the selected stations and recalculate map view
+      */
+Index: CLAUDE.md
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+># Rain Alert Android Project Guide\r\n\r\n## Build Commands\r\n- Build project: `./gradlew build`\r\n- Clean build: `./gradlew clean build`\r\n- Install debug APK: `./gradlew installDebug`\r\n- Run unit tests: `./gradlew test`\r\n- Run single unit test: `./gradlew test --tests \"com.stoneCode.rain_alert.ExampleUnitTest.addition_isCorrect\"`\r\n- Run instrumented tests: `./gradlew connectedAndroidTest`\r\n- Run lint checks: `./gradlew lint`\r\n\r\n## Code Style Guidelines\r\n- Use Kotlin naming conventions: classes in PascalCase, functions/variables in camelCase\r\n- Package structure: `com.stoneCode.rain_alert.[feature]`\r\n- Organize imports by type (Android/androidx first, then project-specific)\r\n- Use 4-space indentation and line wrapping for readability\r\n- Follow MVVM architecture pattern with clear separation of concerns\r\n- Use extension functions for reusable functionality\r\n- Handle errors with appropriate logging and user feedback (Toast/Snackbar)\r\n- Utilize Kotlin's null safety features consistently (safe calls, elvis operator)\r\n- Document complex logic with comments\r\n- Keep functions small and focused on single responsibility
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CLAUDE.md b/CLAUDE.md
+--- a/CLAUDE.md	(revision 53f051acc55df57f474c72f304b87499479dfe28)
++++ b/CLAUDE.md	(date 1741534385276)
+@@ -1,5 +1,28 @@
+ # Rain Alert Android Project Guide
+ 
++## App Goals and Purpose
++Rain Alert is a specialized weather notification app designed to provide timely alerts for rain and freezing conditions. Unlike general weather apps that display forecasts, Rain Alert focuses specifically on notifying users about imminent precipitation or freezing conditions at their location. The app's primary features include:
++
++- **Real-time weather monitoring**: Tracks current weather conditions using data from multiple weather stations
++- **Smart local alerts**: Provides notifications about imminent rain or freezing conditions
++- **Enhanced accuracy**: Uses an aggregation of at least three local weather stations to determine weather event probability
++- **Location-based analysis**: Calculates probability of weather events based on:
++  - Distance to reporting weather stations
++  - Similarity of weather conditions across stations
++  - Weather patterns and movement direction
++
++## Weather Event Algorithm
++The app uses a sophisticated algorithm to determine the probability of weather events at the user's location:
++
++1. **Data Collection**: Gathers data from multiple nearby weather stations (minimum 3)
++2. **Distance Weighting**: Assigns higher importance to closer stations using inverse distance weighting
++3. **Condition Analysis**: Evaluates weather conditions reported by each station
++4. **Consistency Check**: Determines if multiple stations report similar conditions
++5. **Probability Calculation**: Combines weighted station data to calculate event probability
++6. **Threshold Evaluation**: Generates alerts when probability exceeds configured thresholds
++
++This approach provides more accurate and timely alerts than relying on a single weather source or general forecast data.
++
+ ## Build Commands
+ - Build project: `./gradlew build`
+ - Clean build: `./gradlew clean build`
+@@ -19,4 +42,13 @@
+ - Handle errors with appropriate logging and user feedback (Toast/Snackbar)
+ - Utilize Kotlin's null safety features consistently (safe calls, elvis operator)
+ - Document complex logic with comments
+-- Keep functions small and focused on single responsibility
+\ No newline at end of file
++- Keep functions small and focused on single responsibility
++
++## Development Guidelines
++- Focus on current weather and alerts, not forecasts
++- Prioritize battery efficiency in background monitoring
++- Ensure reliable notifications for important weather events
++- Maintain a clean, intuitive UI focused on essential information
++- Support location tracking with appropriate permissions
++- Implement proper foreground service handling for consistent updates
++- Follow Material Design principles for consistent visual experience
+\ No newline at end of file
