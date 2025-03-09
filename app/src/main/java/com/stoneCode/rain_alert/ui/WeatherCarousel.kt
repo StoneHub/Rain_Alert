@@ -62,7 +62,9 @@ fun WeatherCarousel(
     onChangeLocationClick: () -> Unit,
     onSelectStationsClick: () -> Unit,
     onStationLongClick: (String) -> Unit = {},
-    radarMapViewModel: RadarMapViewModel = viewModel()
+    radarMapViewModel: RadarMapViewModel = viewModel(),
+    // Add new parameter for navigation to full screen map
+    onNavigateToFullMap: () -> Unit = {}
 ) {
     val pagerState = rememberPagerState(pageCount = { 2 })
     val scope = rememberCoroutineScope()
@@ -129,7 +131,10 @@ fun WeatherCarousel(
                                     weatherViewModel.updateWeatherStatus()
                                 },
                                 fullScreen = false,
-                                onToggleFullScreen = { showFullScreenRadar = true },
+                                onToggleFullScreen = { 
+                                    // Instead of showing a dialog, navigate to full screen map
+                                    onNavigateToFullMap()
+                                },
                                 onMyLocationClick = {
                                     // Use device location and center map without refreshing data
                                     val location = weatherViewModel.getLastKnownLocation()
@@ -228,49 +233,7 @@ fun WeatherCarousel(
         }
     }
     
-    // Full Screen Radar Map Dialog
-    if (showFullScreenRadar) {
-        Dialog(
-            onDismissRequest = { showFullScreenRadar = false }
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                // Get center from stations or use default
-                val center = if (stationData.isNotEmpty()) {
-                    val lat = stationData.map { it.station.latitude }.average()
-                    val lng = stationData.map { it.station.longitude }.average()
-                    LatLng(lat, lng)
-                } else {
-                    // Default US center
-                    LatLng(40.0, -98.0)
-                }
-                
-                RadarMapComponent(
-                    modifier = Modifier.fillMaxWidth().fillMaxHeight(),
-                    centerLatLng = center,
-                    selectedStations = stationData.map { it.station },
-                    isLoading = isRefreshing,
-                    onRefresh = {
-                        radarMapViewModel.refreshRadarData()
-                        weatherViewModel.updateWeatherStatus()
-                    },
-                    fullScreen = true,
-                    onToggleFullScreen = { showFullScreenRadar = false },
-                    onMyLocationClick = {
-                        // Use device location and center map without refreshing data
-                        val location = weatherViewModel.getLastKnownLocation()
-                        if (location != null) {
-                            radarMapViewModel.updateMapCenter(LatLng(location.latitude, location.longitude))
-                            radarMapViewModel.updateMapZoom(9f) // Zoom in to a good level for local viewing
-                        }
-                    },
-                    onChangeLocationClick = onChangeLocationClick
-                )
-            }
-        }
-    }
+    // The full screen dialog has been removed - navigation now happens through onNavigateToFullMap
 }
 
 @Preview(showBackground = true, widthDp = 360, heightDp = 600)

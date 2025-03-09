@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -101,7 +102,7 @@ fun HelpDialog(
                 BulletPoint(text = "Check that you've selected at least one weather station")
                 
                 Spacer(modifier = Modifier.height(16.dp))
-                Divider()
+                HorizontalDivider()
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 // Permission control buttons
@@ -198,7 +199,7 @@ private fun Row(
     modifier: Modifier = Modifier,
     horizontalArrangement: androidx.compose.foundation.layout.Arrangement.Horizontal = androidx.compose.foundation.layout.Arrangement.Start,
     verticalAlignment: androidx.compose.ui.Alignment.Vertical = androidx.compose.ui.Alignment.Top,
-    content: @Composable () -> Unit
+    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
 ) {
     androidx.compose.foundation.layout.Row(
         modifier = modifier,
