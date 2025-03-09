@@ -56,6 +56,9 @@ import kotlinx.coroutines.launch
 /**
  * A shared map component that can be used in both carousel and fullscreen modes.
  * Centralizes the common functionality between different map views.
+ * 
+ * Used in both the vertical layout of MainScreen (replacing WeatherCarousel) and
+ * in the fullscreen map view.
  */
 @Composable
 fun SharedMapComponent(

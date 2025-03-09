@@ -4,6 +4,30 @@ This document provides a chronological summary of major changes and development 
 
 ## Recent Development Sessions
 
+### March 9, 2025 - UI Reorganization
+
+**Main Changes:**
+- Redesigned app UI to use a vertical scrolling layout instead of carousel
+- Moved service control to the app bar as a toggle switch
+- Improved app bar design with semi-transparent background for better text visibility
+- Simplified component hierarchy for better user experience:
+  - Map component displayed directly in the vertical flow
+  - Station list positioned below the map
+  - Quick access buttons moved to their own card
+- Preserved the WeatherCarousel component but marked it as unused for reference
+
+**Key Files Modified:**
+- Updated:
+  - `/app/src/main/java/com/stoneCode/rain_alert/ui/MainScreen.kt` - Complete overhaul of UI structure
+  - `/app/src/main/java/com/stoneCode/rain_alert/ui/WeatherCarousel.kt` - Marked as unused
+  - `/app/src/main/java/com/stoneCode/rain_alert/ui/map/SharedMapComponent.kt` - Updated documentation
+
+**Technical Details:**
+- Enhanced UX with more intuitive vertical flow
+- Improved accessibility by placing service control toggle in app bar
+- Added visual indicators for service state
+- Maintained all functionality while streamlining navigation
+
 ### March 9, 2025 - Map Component and Coordinate System Fixes
 
 **Main Changes:**
