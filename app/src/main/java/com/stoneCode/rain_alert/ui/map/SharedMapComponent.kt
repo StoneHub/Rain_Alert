@@ -143,7 +143,6 @@ fun SharedMapComponent(
         MapDisplayMode.FULLSCREEN -> {
             Column(modifier = modifier.fillMaxSize()) {
                 // Top Bar with title and back button
-                if (displayMode == MapDisplayMode.FULLSCREEN) {
                     @OptIn(ExperimentalMaterial3Api::class)
                     TopAppBar(
                         title = { Text("Current Weather") },

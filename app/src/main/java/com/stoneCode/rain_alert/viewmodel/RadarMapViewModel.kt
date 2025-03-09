@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
  */
 class RadarMapViewModel(application: Application) : AndroidViewModel(application) {
     
-    private val radarMapRepository = RadarMapRepository(application)
+    private val radarMapRepository = RadarMapRepository()
     
     // Map center and zoom
     private val _mapCenter = MutableLiveData<LatLng>(LatLng(40.0, -98.0)) // Default to center of US
@@ -140,13 +140,6 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
     }
     
     /**
-     * Check if a specific layer is active
-     */
-    fun isLayerActive(layer: WeatherLayer): Boolean {
-        return _activeLayer.value == layer
-    }
-    
-    /**
      * Fetch current radar data for all weather layers
      */
     fun fetchRadarData(center: LatLng = _mapCenter.value ?: LatLng(40.0, -98.0)) {
@@ -158,7 +151,7 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
                 val currentBounds = _mapBounds.value
                 
                 // Fetch precipitation radar
-                radarMapRepository.getPrecipitationRadarUrl(center, currentBounds).fold(
+                radarMapRepository.getPrecipitationRadarUrl(currentBounds).fold(
                     onSuccess = { url ->
                         _precipitationRadarUrl.value = url
                     },
@@ -168,7 +161,7 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
                 )
                 
                 // Fetch wind radar
-                radarMapRepository.getWindRadarUrl(center, currentBounds).fold(
+                radarMapRepository.getWindRadarUrl(currentBounds).fold(
                     onSuccess = { url ->
                         _windRadarUrl.value = url
                     },
@@ -181,7 +174,7 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
                 )
                 
                 // Fetch temperature data
-                radarMapRepository.getTemperatureRadarUrl(center, currentBounds).fold(
+                radarMapRepository.getTemperatureRadarUrl(currentBounds).fold(
                     onSuccess = { url ->
                         _temperatureRadarUrl.value = url
                         Log.d("RadarMapViewModel", "Loaded temperature data: $url")
@@ -224,23 +217,14 @@ class RadarMapViewModel(application: Application) : AndroidViewModel(application
     }
     
     /**
-     * Toggle temperature layer visibility
-     * @deprecated Use toggleLayer(WeatherLayer.TEMPERATURE) instead
-     */
-    fun toggleTemperatureLayer() {
-        toggleLayer(WeatherLayer.TEMPERATURE)
-    }
-    
-    /**
      * Fetch temperature data specifically
      */
     private fun fetchTemperatureData() {
         viewModelScope.launch {
             try {
-                val center = _mapCenter.value ?: LatLng(40.0, -98.0)
                 val currentBounds = _mapBounds.value
                 
-                radarMapRepository.getTemperatureRadarUrl(center, currentBounds).fold(
+                radarMapRepository.getTemperatureRadarUrl(currentBounds).fold(
                     onSuccess = { url ->
                         _temperatureRadarUrl.value = url
                         Log.d("RadarMapViewModel", "Loaded temperature data: $url")

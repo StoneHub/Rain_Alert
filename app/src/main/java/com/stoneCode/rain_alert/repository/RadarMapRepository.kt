@@ -1,6 +1,5 @@
 package com.stoneCode.rain_alert.repository
 
-import android.content.Context
 import android.util.Log
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
@@ -16,7 +15,7 @@ import java.util.concurrent.TimeUnit
 /**
  * Repository for fetching radar map data from Weather.gov API
  */
-class RadarMapRepository(private val context: Context) {
+class RadarMapRepository {
     
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -27,7 +26,7 @@ class RadarMapRepository(private val context: Context) {
      * Get precipitation radar tile URL for a specific area
      * Note: Weather.gov API provides radar data as WMS tiles
      */
-    suspend fun getPrecipitationRadarUrl(center: LatLng, mapBounds: LatLngBounds? = null): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun getPrecipitationRadarUrl(mapBounds: LatLngBounds? = null): Result<String> = withContext(Dispatchers.IO) {
         try {
             // Use the NWS WMS service for precipitation data (Quantitative Precipitation Forecast)
             // See: https://digital.weather.gov/ndfd.conus/wms?REQUEST=GetCapabilities
@@ -60,7 +59,7 @@ class RadarMapRepository(private val context: Context) {
     /**
      * Get wind speed radar tile URL for a specific area
      */
-    suspend fun getWindRadarUrl(center: LatLng, mapBounds: LatLngBounds? = null): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun getWindRadarUrl(mapBounds: LatLngBounds? = null): Result<String> = withContext(Dispatchers.IO) {
         try {
             // Use the NWS WMS service for wind data
             // See: https://digital.weather.gov/ndfd.conus/wms?REQUEST=GetCapabilities
@@ -93,7 +92,7 @@ class RadarMapRepository(private val context: Context) {
     /**
      * Get temperature radar tile URL for a specific area
      */
-    suspend fun getTemperatureRadarUrl(center: LatLng, mapBounds: LatLngBounds? = null): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun getTemperatureRadarUrl(mapBounds: LatLngBounds? = null): Result<String> = withContext(Dispatchers.IO) {
         try {
             // Format the current date for the VTIT parameter
             val calendar = java.util.Calendar.getInstance()

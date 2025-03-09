@@ -78,24 +78,4 @@ object MapCoordinateUtils {
         return "-14200679.12,2500000,-7400000,6505689.94"
     }
     
-    /**
-     * Creates a bbox string centered on a specific point with a width/height in degrees
-     */
-    fun createCenteredBbox(center: LatLng, widthDegrees: Double = 5.0, heightDegrees: Double = 3.0): String {
-        val southwest = LatLng(
-            center.latitude - (heightDegrees / 2.0),
-            center.longitude - (widthDegrees / 2.0)
-        )
-        val northeast = LatLng(
-            center.latitude + (heightDegrees / 2.0),
-            center.longitude + (widthDegrees / 2.0)
-        )
-        
-        val bounds = LatLngBounds.builder()
-            .include(southwest)
-            .include(northeast)
-            .build()
-        
-        return latLngBoundsToBbox(bounds)
-    }
 }
