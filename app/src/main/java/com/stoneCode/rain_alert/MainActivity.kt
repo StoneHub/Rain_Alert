@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
+import com.google.android.gms.maps.model.LatLng
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -24,6 +25,7 @@ import com.stoneCode.rain_alert.service.RainService
 import com.stoneCode.rain_alert.ui.AlertHistoryScreen
 import com.stoneCode.rain_alert.ui.MainScreen
 import com.stoneCode.rain_alert.ui.SettingsScreen
+import com.stoneCode.rain_alert.ui.map.WeatherMapScreen
 import com.stoneCode.rain_alert.ui.theme.Rain_AlertTheme
 import com.stoneCode.rain_alert.viewmodel.WeatherViewModel
 
@@ -153,6 +155,9 @@ class MainActivity : ComponentActivity() {
                     onOpenStationWebsiteClick = { stationUrl ->
                         openStationWebsite(stationUrl)
                     },
+                    onMapClick = {
+                        navController.navigate("weather_map")
+                    },
                     weatherViewModel = weatherViewModel
                 )
             }
@@ -181,6 +186,26 @@ class MainActivity : ComponentActivity() {
                             startForegroundService(simulateFreezeIntent)
                         } else {
                             startService(simulateFreezeIntent)
+                        }
+                    }
+                )
+            }
+            
+            composable("weather_map") {
+                WeatherMapScreen(
+                    myLocation = weatherRepository.getLastKnownLocation()?.let { 
+                        LatLng(it.latitude, it.longitude) 
+                    },
+                    onRefresh = {
+                        // Refresh weather data
+                        weatherViewModel.updateWeatherStatus()
+                    },
+                    onMyLocationClick = {
+                        // Request location permission if needed
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            if (!hasRequiredPermissions()) {
+                                requestRequiredPermissions()
+                            }
                         }
                     }
                 )

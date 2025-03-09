@@ -4,21 +4,16 @@ import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fullscreen
@@ -68,9 +63,6 @@ import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.stoneCode.rain_alert.api.WeatherStation
 import com.stoneCode.rain_alert.repository.RadarMapRepository
-import com.stoneCode.rain_alert.ui.map.ForecastMapScrubber
-import com.stoneCode.rain_alert.ui.map.ForecastTimelineManager
-import com.stoneCode.rain_alert.ui.map.HorizontalForecastScrubber
 import com.stoneCode.rain_alert.ui.map.WeatherOverlay
 import com.stoneCode.rain_alert.viewmodel.RadarMapViewModel
 import kotlinx.coroutines.launch
@@ -101,13 +93,7 @@ fun RadarMapComponent(
     var showStationsLayer by remember { mutableStateOf(true) }
     var showTriangleLayer by remember { mutableStateOf(selectedStations.size >= 3) }
 
-    // Forecast animation settings
-    val forecastTimeSteps by radarMapViewModel.forecastTimeSteps.observeAsState(emptyList())
-    val currentTimeIndex by radarMapViewModel.currentTimeIndex.observeAsState(0)
-    val isAnimationPlaying by radarMapViewModel.isAnimationPlaying.observeAsState(false)
-    val forecastAnimationEnabled by radarMapViewModel.forecastAnimationEnabled.observeAsState(false)
-    val currentAnimationRadarUrl by radarMapViewModel.currentAnimationRadarUrl.observeAsState()
-    val forecastAnimationLayer by radarMapViewModel.forecastAnimationLayer.observeAsState(ForecastTimelineManager.LAYER_PRECIPITATION)
+    // Weather data state
 
     val precipitationRadarUrl by radarMapViewModel.precipitationRadarUrl.observeAsState()
     val windRadarUrl by radarMapViewModel.windRadarUrl.observeAsState()
@@ -208,56 +194,35 @@ fun RadarMapComponent(
                 Log.d("RadarMapComponent", "Map loaded and ready")
             }
         ) {
-            // If forecast animation is on AND we have a current frame:
-            if (forecastAnimationEnabled && currentAnimationRadarUrl != null) {
-                // Show the animated layer
+            // Display weather layers
+            // Temperature layer (lowest z-index so it appears below other layers)
+            if (isTemperatureLayerEnabled && temperatureRadarUrl != null) {
                 WeatherOverlay(
-                    imageUrl = currentAnimationRadarUrl,
+                    imageUrl = temperatureRadarUrl,
+                    visible = true,
+                    transparency = 0.4f,
+                    zIndex = 0f
+                )
+            }
+            
+            // Precipitation layer (middle z-index)
+            if (showPrecipitationLayer && precipitationRadarUrl != null) {
+                WeatherOverlay(
+                    imageUrl = precipitationRadarUrl,
                     visible = true,
                     transparency = 0.3f,
-                    zIndex = 0f    // base z-index for animation layer
+                    zIndex = 1f
                 )
-                
-                // Log which layer we're currently animating
-                android.util.Log.d("RadarMapComponent", "Showing animation frame for layer: $forecastAnimationLayer URL: $currentAnimationRadarUrl")
-                
-                // Only show temperature additionally if it's not being animated
-                if (isTemperatureLayerEnabled && 
-                    forecastAnimationLayer != ForecastTimelineManager.LAYER_TEMPERATURE && 
-                    temperatureRadarUrl != null) {
-                    WeatherOverlay(
-                        imageUrl = temperatureRadarUrl,
-                        visible = true,
-                        transparency = 0.3f,
-                        zIndex = 2f
-                    )
-                }
-            } else {
-                // Standard mode (no animation)
-                if (showPrecipitationLayer && precipitationRadarUrl != null) {
-                    WeatherOverlay(
-                        imageUrl = precipitationRadarUrl,
-                        visible = true,
-                        transparency = 0.3f,
-                        zIndex = 0f
-                    )
-                }
-                if (showWindLayer && windRadarUrl != null) {
-                    WeatherOverlay(
-                        imageUrl = windRadarUrl,
-                        visible = true,
-                        transparency = 0.4f,
-                        zIndex = 1f
-                    )
-                }
-                if (isTemperatureLayerEnabled && temperatureRadarUrl != null) {
-                    WeatherOverlay(
-                        imageUrl = temperatureRadarUrl,
-                        visible = true,
-                        transparency = 0.3f,
-                        zIndex = 2f
-                    )
-                }
+            }
+            
+            // Wind layer (highest z-index for weather overlays)
+            if (showWindLayer && windRadarUrl != null) {
+                WeatherOverlay(
+                    imageUrl = windRadarUrl,
+                    visible = true,
+                    transparency = 0.4f,
+                    zIndex = 2f
+                )
             }
 
             // Triangular area
@@ -431,28 +396,11 @@ fun RadarMapComponent(
                 onToggleStations = { showStationsLayer = !showStationsLayer },
                 showTriangle = showTriangleLayer,
                 onToggleTriangle = { showTriangleLayer = !showTriangleLayer },
-                triangleEnabled = selectedStations.size >= 3,
-                forecastAnimationEnabled = forecastAnimationEnabled,
-                onToggleForecastAnimation = { radarMapViewModel.toggleForecastAnimation() },
-                currentAnimationLayer = forecastAnimationLayer,
-                onChangeAnimationLayer = { newLayer -> radarMapViewModel.changeAnimationLayer(newLayer) }
+                triangleEnabled = selectedStations.size >= 3
             )
         }
 
-        // Forecast scrubber along bottom if animation is on
-        if (forecastAnimationEnabled && forecastTimeSteps.isNotEmpty() && !isRadarLoading) {
-            HorizontalForecastScrubber(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(bottom = if (fullScreen) 0.dp else 8.dp),
-                timeSteps = forecastTimeSteps,
-                currentTimeIndex = currentTimeIndex,
-                onTimeStepSelected = { radarMapViewModel.updateCurrentTimeIndex(it) },
-                isPlaying = isAnimationPlaying,
-                onPlayPauseToggled = { radarMapViewModel.toggleAnimation() }
-            )
-        }
+        // No forecast scrubber
     }
 
     // Dialog for station info
@@ -513,11 +461,7 @@ fun MapControls(
     onToggleStations: () -> Unit = {},
     showTriangle: Boolean = false,
     onToggleTriangle: () -> Unit = {},
-    triangleEnabled: Boolean = false,
-    forecastAnimationEnabled: Boolean = false,
-    onToggleForecastAnimation: () -> Unit = {},
-    currentAnimationLayer: String = ForecastTimelineManager.LAYER_PRECIPITATION,
-    onChangeAnimationLayer: (String) -> Unit = {}
+    triangleEnabled: Boolean = false
 ) {
     Card(
         modifier = modifier,
@@ -549,32 +493,6 @@ fun MapControls(
             LayerToggle("Temperature", showTemperature, onToggleTemperature)
             LayerToggle("Stations", showStations, onToggleStations)
             LayerToggle("Coverage Area", showTriangle, onToggleTriangle, enabled = triangleEnabled)
-            LayerToggle("Forecast Anim.", forecastAnimationEnabled, onToggleForecastAnimation)
-            
-            // Animation layer selector (only visible when animation is enabled)
-            if (forecastAnimationEnabled) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Animation Layer", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                
-                // Layer selection options with radio buttons
-                AnimationLayerOption(
-                    "Precipitation",
-                    isSelected = currentAnimationLayer == ForecastTimelineManager.LAYER_PRECIPITATION,
-                    onClick = { onChangeAnimationLayer(ForecastTimelineManager.LAYER_PRECIPITATION) }
-                )
-                
-                AnimationLayerOption(
-                    "Wind",
-                    isSelected = currentAnimationLayer == ForecastTimelineManager.LAYER_WIND,
-                    onClick = { onChangeAnimationLayer(ForecastTimelineManager.LAYER_WIND) }
-                )
-                
-                AnimationLayerOption(
-                    "Temperature",
-                    isSelected = currentAnimationLayer == ForecastTimelineManager.LAYER_TEMPERATURE,
-                    onClick = { onChangeAnimationLayer(ForecastTimelineManager.LAYER_TEMPERATURE) }
-                )
-            }
         }
     }
 }
@@ -606,55 +524,3 @@ fun LayerToggle(
     }
 }
 
-/**
- * Option for animation layer selection with a radio button style
- */
-@Composable
-fun AnimationLayerOption(
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp)
-            .clickable(onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Radio button-like circle
-        Box(
-            modifier = Modifier
-                .size(20.dp)
-                .padding(4.dp)
-                .background(Color.Transparent)
-                .border(
-                    width = 2.dp,
-                    color = MaterialTheme.colorScheme.primary,
-                    shape = CircleShape
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            if (isSelected) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = CircleShape
-                        )
-                )
-            }
-        }
-        
-        Spacer(modifier = Modifier.width(8.dp))
-        
-        // Label
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f)
-        )
-    }
-}

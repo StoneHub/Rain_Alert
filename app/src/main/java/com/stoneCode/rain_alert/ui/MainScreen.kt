@@ -61,6 +61,7 @@ fun MainScreen(
     onSettingsClick: () -> Unit,
     onViewHistoryClick: () -> Unit,
     onOpenStationWebsiteClick: (String) -> Unit,  // New function to open station website
+    onMapClick: () -> Unit, // Function to open the weather map
     weatherViewModel: WeatherViewModel = viewModel()
 ) {
     val isServiceRunning by weatherViewModel.isServiceRunning.observeAsState(false)
@@ -264,6 +265,13 @@ fun MainScreen(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text("Open Weather Website")
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = onMapClick,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Open Weather Map")
                             }
                         }
                     }
