@@ -9,11 +9,15 @@ import java.util.UUID
 
 /**
  * Singleton class to handle Firebase Analytics logging
+ * Enhanced to capture detailed metrics about the weather algorithm performance
  */
 class FirebaseLogger private constructor() {
     private lateinit var firebaseAnalytics: FirebaseAnalytics
     private var userId: String? = null
     private val TAG = "FirebaseLogger"
+    
+    // Current version of the weather algorithm for tracking improvements over time
+    val ALGORITHM_VERSION = "1.0.0"
 
     fun initialize(context: Context) {
         try {
@@ -76,11 +80,26 @@ class FirebaseLogger private constructor() {
         }
     }
 
-    fun logNotificationSent(notificationType: String) {
+    fun logNotificationSent(
+        notificationType: String,
+        alertId: String? = null,
+        stationCount: Int? = null,
+        weightedPercentage: Double? = null,
+        thresholdUsed: Double? = null,
+        useMultiStationApproach: Boolean? = null
+    ) {
         try {
             val bundle = Bundle().apply {
                 putString("notification_type", notificationType)
                 putLong("time", System.currentTimeMillis())
+                putString("algorithm_version", ALGORITHM_VERSION)
+                
+                // Add detailed information about the alert
+                alertId?.let { putString("alert_id", it) }
+                stationCount?.let { putInt("station_count", it) }
+                weightedPercentage?.let { putDouble("weighted_percentage", it) }
+                thresholdUsed?.let { putDouble("threshold_used", it) }
+                useMultiStationApproach?.let { putBoolean("multi_station_approach", it) }
             }
             firebaseAnalytics.logEvent("notification_sent", bundle)
             Log.d(TAG, "Logged notification sent: $notificationType")
@@ -93,14 +112,25 @@ class FirebaseLogger private constructor() {
         isRaining: Boolean,
         isFreezing: Boolean,
         precipitationChance: Int?,
-        temperature: Double?
+        temperature: Double?,
+        stationCount: Int? = null,
+        maxStationDistance: Double? = null,
+        calculationTimeMs: Long? = null,
+        algorithmType: String? = null
     ) {
         try {
             val bundle = Bundle().apply {
                 putBoolean("is_raining", isRaining)
                 putBoolean("is_freezing", isFreezing)
+                putString("algorithm_version", ALGORITHM_VERSION)
                 precipitationChance?.let { putInt("precipitation_chance", it) }
                 temperature?.let { putDouble("temperature", it) }
+                
+                // Add detailed algorithm performance metrics
+                stationCount?.let { putInt("station_count", it) }
+                maxStationDistance?.let { putDouble("max_station_distance", it) }
+                calculationTimeMs?.let { putLong("calculation_time_ms", it) }
+                algorithmType?.let { putString("algorithm_type", it) }
             }
             firebaseAnalytics.logEvent("weather_check", bundle)
             Log.d(TAG, "Logged weather check: Rain=$isRaining, Freeze=$isFreezing")
@@ -140,6 +170,59 @@ class FirebaseLogger private constructor() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error logging API status: ${e.message}")
+        }
+    }
+
+    /**
+     * Log user feedback about alert accuracy
+     */
+    fun logAlertFeedback(
+        alertId: String, 
+        alertType: String,
+        accuracyScore: Int, 
+        hasFeedbackText: Boolean
+    ) {
+        try {
+            val bundle = Bundle().apply {
+                putString("alert_id", alertId)
+                putString("alert_type", alertType)
+                putInt("accuracy_score", accuracyScore)
+                putBoolean("has_feedback_text", hasFeedbackText)
+                putString("algorithm_version", ALGORITHM_VERSION)
+                putLong("feedback_time", System.currentTimeMillis())
+            }
+            firebaseAnalytics.logEvent("alert_feedback", bundle)
+            Log.d(TAG, "Logged alert feedback: score=$accuracyScore for $alertType alert")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error logging alert feedback: ${e.message}")
+        }
+    }
+    
+    /**
+     * Log algorithm performance metrics
+     */
+    fun logAlgorithmPerformance(
+        algorithmType: String, 
+        calculationTimeMs: Long,
+        numStationsUsed: Int,
+        maxDistance: Double,
+        weightingMethod: String,
+        successful: Boolean
+    ) {
+        try {
+            val bundle = Bundle().apply {
+                putString("algorithm_type", algorithmType)
+                putLong("calculation_time_ms", calculationTimeMs)
+                putInt("stations_used", numStationsUsed)
+                putDouble("max_distance", maxDistance)
+                putString("weighting_method", weightingMethod)
+                putBoolean("successful", successful)
+                putString("algorithm_version", ALGORITHM_VERSION)
+            }
+            firebaseAnalytics.logEvent("algorithm_performance", bundle)
+            Log.d(TAG, "Logged algorithm performance: type=$algorithmType, time=$calculationTimeMs ms")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error logging algorithm performance: ${e.message}")
         }
     }
 

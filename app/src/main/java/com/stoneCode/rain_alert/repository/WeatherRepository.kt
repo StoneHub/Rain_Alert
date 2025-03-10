@@ -7,11 +7,14 @@ import android.location.Geocoder
 import android.util.Log
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import com.stoneCode.rain_alert.api.MultiStationWeatherService
 import com.stoneCode.rain_alert.data.AppConfig
 import com.stoneCode.rain_alert.data.StationObservation
 import com.stoneCode.rain_alert.data.UserPreferences
+import com.stoneCode.rain_alert.model.StationDetail
+import com.stoneCode.rain_alert.model.WeatherCheckResult
 import com.stoneCode.rain_alert.service.WeatherApiService
 import kotlinx.coroutines.flow.first
 import org.json.JSONObject
@@ -37,6 +40,11 @@ class WeatherRepository(private val context: Context) {
     // Store multi-station data
     private var currentStations: List<StationObservation> = emptyList()
     private var stationsLastUpdated: Long = 0
+    
+    // Store additional metrics
+    private var lastStationCount: Int = 0
+    private var lastWeightedPercentage: Double = 0.0
+    private var lastMultiStationApproach: Boolean = false
     
     /**
      * Filter stations based on user preferences
@@ -84,20 +92,59 @@ class WeatherRepository(private val context: Context) {
         return getLastKnownLocation()
     }
 
-    suspend fun checkForRain(): Boolean {
-        val lastKnownLocation = getCurrentLocation() ?: return false
+    /**
+     * Enhanced version of checkForRain that returns detailed results for analytics
+     */
+    suspend fun checkForRainWithDetails(): WeatherCheckResult {
+        val lastKnownLocation = getCurrentLocation() ?: return WeatherCheckResult(isRaining = false)
         val latitude = lastKnownLocation.latitude
         val longitude = lastKnownLocation.longitude
-
+        var usedMultiStationApproach = false
+        var weightedPercentage: Double? = null
+        var thresholdUsed: Double? = null
+        var stationCount: Int? = null
+        var maxDistance: Double? = null
+        var stationDetails: List<StationDetail>? = null
+        
         // First try multi-station approach
         val stationsResult = getUpdatedStationObservations(latitude, longitude)
         
         if (stationsResult.isSuccess) {
             val stations = stationsResult.getOrNull() ?: emptyList()
             if (stations.isNotEmpty()) {
-                // Use threshold from user preferences
+                usedMultiStationApproach = true
+                stationCount = stations.size
+                maxDistance = stations.map { it.station.distance ?: 0.0 }.maxOrNull() ?: 0.0
+                
+                // Get threshold from user preferences
                 val rainProbabilityThreshold = userPreferences.rainProbabilityThreshold.first()
-                val isRaining = multiStationWeatherService.analyzeForRain(stations, rainProbabilityThreshold)
+                thresholdUsed = rainProbabilityThreshold.toDouble()
+                
+                // Get detailed analysis
+                val analysisResult = multiStationWeatherService.analyzeForRainWithDetails(stations, rainProbabilityThreshold)
+                val isRaining = analysisResult.first
+                weightedPercentage = analysisResult.second
+                
+                // Store metrics for later queries
+                lastStationCount = stationCount
+                lastWeightedPercentage = weightedPercentage
+                lastMultiStationApproach = true
+                
+                // Create station details
+                stationDetails = stations.map { station ->
+                    StationDetail(
+                        id = station.station.id,
+                        name = station.station.name,
+                        distance = station.station.distance ?: 0.0,
+                        weight = 1.0 / Math.max(station.station.distance ?: 1.0, 1.0),
+                        isReportingRain = station.isRaining(),
+                        temperature = station.temperature,
+                        precipitation = station.precipitationLastHour,
+                        textDescription = station.textDescription,
+                        observationTime = station.timestamp?.let { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault()).parse(it)?.time }
+                    )
+                }
+                
                 if (isRaining) {
                     val rainingStations = stations.filter { it.isRaining() }
                     // Get precipitation chance from the closest station that is reporting rain
@@ -105,27 +152,92 @@ class WeatherRepository(private val context: Context) {
                         .firstOrNull()
                         ?.precipitationLastHour
                         ?.let { (it * 100).toInt().coerceAtMost(100) }
-                    return true
+                    
+                    return WeatherCheckResult(
+                        isRaining = true,
+                        usedMultiStationApproach = true,
+                        thresholdUsed = thresholdUsed,
+                        weightedPercentage = weightedPercentage,
+                        stationsUsed = stationCount,
+                        maxDistance = maxDistance,
+                        stationDetails = stationDetails
+                    )
                 }
-                return false
+                
+                return WeatherCheckResult(
+                    isRaining = false,
+                    usedMultiStationApproach = true,
+                    thresholdUsed = thresholdUsed,
+                    weightedPercentage = weightedPercentage,
+                    stationsUsed = stationCount,
+                    maxDistance = maxDistance,
+                    stationDetails = stationDetails
+                )
             }
         }
         
         // Fall back to traditional forecast method if multi-station approach fails
         Log.d(TAG, "Falling back to traditional forecast method for rain check")
-        val forecastJson = weatherApiService.getForecast(latitude, longitude) ?: return false
-        return parseForecastForRain(forecastJson)
+        val forecastJson = weatherApiService.getForecast(latitude, longitude) ?: 
+            return WeatherCheckResult(isRaining = false)
+        
+        // Store metrics for later queries
+        lastStationCount = 0
+        lastWeightedPercentage = 0.0
+        lastMultiStationApproach = false
+        
+        val isRaining = parseForecastForRain(forecastJson)
+        thresholdUsed = AppConfig.RAIN_PROBABILITY_THRESHOLD.toDouble()
+        
+        return WeatherCheckResult(
+            isRaining = isRaining,
+            usedMultiStationApproach = false,
+            thresholdUsed = thresholdUsed,
+            weightedPercentage = precipitationChance?.toDouble(),
+            stationsUsed = 0,
+            maxDistance = null,
+            stationDetails = null
+        )
     }
 
-    suspend fun checkForFreezeWarning(): Boolean {
+    /**
+     * Original checkForRain method (calls enhanced version)
+     */
+    suspend fun checkForRain(): Boolean {
+        return checkForRainWithDetails().isRaining
+    }
+
+    /**
+     * Enhanced version of checkForFreezeWarning that returns detailed results for analytics
+     */
+    suspend fun checkForFreezeWarningWithDetails(): WeatherCheckResult {
         val currentTime = System.currentTimeMillis()
         if (currentTime - lastFreezeCheckTime < 4 * 60 * 60 * 1000) {
-            return isFreezing // Return cached value if checked within the last 4 hours
+            // Return cached result with limited details if checked recently
+            return WeatherCheckResult(
+                isFreezing = isFreezing,
+                usedMultiStationApproach = lastMultiStationApproach,
+                stationsUsed = lastStationCount,
+                maxDistance = null,
+                weightedPercentage = null,
+                thresholdUsed = userPreferences.freezeThreshold.first()
+            )
         }
 
-        val lastKnownLocation = getCurrentLocation() ?: return false
+        val lastKnownLocation = getCurrentLocation() ?: 
+            return WeatherCheckResult(isFreezing = false)
+            
         val latitude = lastKnownLocation.latitude
         val longitude = lastKnownLocation.longitude
+        var usedMultiStationApproach = false
+        var weightedPercentage: Double? = null
+        var stationCount: Int? = null
+        var maxDistance: Double? = null
+        var stationDetails: List<StationDetail>? = null
+        var forecastTemperatures: List<Double>? = null
+        
+        // Get threshold from user preferences
+        val freezeThreshold = userPreferences.freezeThreshold.first()
         
         // Try multi-station approach first
         val stationsResult = getUpdatedStationObservations(latitude, longitude)
@@ -133,27 +245,107 @@ class WeatherRepository(private val context: Context) {
         if (stationsResult.isSuccess) {
             val stations = stationsResult.getOrNull() ?: emptyList()
             if (stations.isNotEmpty()) {
-                // Use threshold from user preferences
-                val freezeThreshold = userPreferences.freezeThreshold.first()
-                val isCurrentlyFreezing = multiStationWeatherService.analyzeForFreeze(stations, freezeThreshold)
+                usedMultiStationApproach = true
+                stationCount = stations.size
+                maxDistance = stations.map { it.station.distance ?: 0.0 }.maxOrNull() ?: 0.0
+                
+                // Get detailed analysis
+                val analysisResult = multiStationWeatherService.analyzeForFreezeWithDetails(stations, freezeThreshold)
+                val isCurrentlyFreezing = analysisResult.first
+                weightedPercentage = analysisResult.second
+                
+                // Store metrics for later queries
+                lastStationCount = stationCount
+                lastWeightedPercentage = weightedPercentage
+                lastMultiStationApproach = true
+                
+                // Create station details
+                stationDetails = stations.map { station ->
+                    StationDetail(
+                        id = station.station.id,
+                        name = station.station.name,
+                        distance = station.station.distance ?: 0.0,
+                        weight = 1.0 / Math.max(station.station.distance ?: 1.0, 1.0),
+                        isReportingFreeze = station.temperature != null && station.temperature <= freezeThreshold,
+                        temperature = station.temperature,
+                        precipitation = station.precipitationLastHour,
+                        textDescription = station.textDescription,
+                        observationTime = station.timestamp?.let { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault()).parse(it)?.time }
+                    )
+                }
                 
                 if (isCurrentlyFreezing) {
                     // We still need to check the forecast to see if it will be freezing for the required duration
-                    val forecastHourlyJson = weatherApiService.getForecastGridData(latitude, longitude) ?: return false
-                    isFreezing = parseForecastForFreeze(forecastHourlyJson)
-                    lastFreezeCheckTime = currentTime
-                    return isFreezing
+                    val forecastHourlyJson = weatherApiService.getForecastGridData(latitude, longitude) 
+                    
+                    if (forecastHourlyJson != null) {
+                        // Parse for freeze durations
+                        val freezeCheckResult = parseForecastForFreezeWithDetails(forecastHourlyJson)
+                        
+                        isFreezing = freezeCheckResult.isFreezing
+                        forecastTemperatures = freezeCheckResult.forecastTemperatures
+                        lastFreezeCheckTime = currentTime
+                        
+                        return WeatherCheckResult(
+                            isFreezing = isFreezing,
+                            usedMultiStationApproach = true,
+                            thresholdUsed = freezeThreshold,
+                            weightedPercentage = weightedPercentage,
+                            stationsUsed = stationCount,
+                            maxDistance = maxDistance,
+                            stationDetails = stationDetails,
+                            currentTemperature = stations.firstOrNull()?.temperature,
+                            forecastTemperatures = forecastTemperatures
+                        )
+                    }
                 }
+                
+                return WeatherCheckResult(
+                    isFreezing = false,
+                    usedMultiStationApproach = true,
+                    thresholdUsed = freezeThreshold,
+                    weightedPercentage = weightedPercentage,
+                    stationsUsed = stationCount,
+                    maxDistance = maxDistance,
+                    stationDetails = stationDetails,
+                    currentTemperature = stations.firstOrNull()?.temperature
+                )
             }
         }
         
         // Fall back to traditional method
         Log.d(TAG, "Falling back to traditional forecast method for freeze check")
-        val forecastHourlyJson = weatherApiService.getForecastGridData(latitude, longitude) ?: return false
-        isFreezing = parseForecastForFreeze(forecastHourlyJson)
+        val forecastHourlyJson = weatherApiService.getForecastGridData(latitude, longitude) ?: 
+            return WeatherCheckResult(isFreezing = false)
+        
+        // Store metrics for later queries
+        lastStationCount = 0
+        lastWeightedPercentage = 0.0
+        lastMultiStationApproach = false
+        
+        // Parse detailed freeze forecast
+        val freezeCheckResult = parseForecastForFreezeWithDetails(forecastHourlyJson)
+        
+        isFreezing = freezeCheckResult.isFreezing
+        forecastTemperatures = freezeCheckResult.forecastTemperatures
         lastFreezeCheckTime = currentTime
+        
+        return WeatherCheckResult(
+            isFreezing = isFreezing,
+            usedMultiStationApproach = false,
+            thresholdUsed = freezeThreshold,
+            stationsUsed = 0,
+            maxDistance = null,
+            currentTemperature = freezeCheckResult.currentTemperature,
+            forecastTemperatures = forecastTemperatures
+        )
+    }
 
-        return isFreezing
+    /**
+     * Original checkForFreezeWarning method (calls enhanced version)
+     */
+    suspend fun checkForFreezeWarning(): Boolean {
+        return checkForFreezeWarningWithDetails().isFreezing
     }
 
     private fun parseForecastForRain(forecastJson: String): Boolean {
@@ -196,7 +388,10 @@ class WeatherRepository(private val context: Context) {
         return false
     }
 
-    private suspend fun parseForecastForFreeze(forecastHourlyJson: String): Boolean {
+    /**
+     * Enhanced freeze forecast parser that returns detailed information
+     */
+    private suspend fun parseForecastForFreezeWithDetails(forecastHourlyJson: String): WeatherCheckResult {
         try {
             val forecast = JSONObject(forecastHourlyJson)
             val periods = forecast.getJSONObject("properties").getJSONArray("periods")
@@ -214,12 +409,22 @@ class WeatherRepository(private val context: Context) {
 
             Log.d(TAG, "Checking for freeze with threshold: ${freezeThreshold}°F for $freezeDurationHours hours")
             
+            // Track temperatures for reporting
+            val temperatures = mutableListOf<Double>()
+            var currentTemperature: Double? = null
+            
             for (i in 0 until periods.length()) {
                 val period = periods.getJSONObject(i)
                 val temperature = period.getDouble("temperature")
                 val startTimeString = period.getString("startTime")
                 val startTime = dateFormat.parse(startTimeString)?.time ?: continue
-
+                
+                if (i == 0) {
+                    currentTemperature = temperature
+                }
+                
+                temperatures.add(temperature)
+                
                 if (temperature <= freezeThreshold) {
                     if (!isCurrentlyFreezing) {
                         freezeStartTime = startTime
@@ -228,16 +433,30 @@ class WeatherRepository(private val context: Context) {
                     val duration = startTime - freezeStartTime
                     if (duration >= freezeDurationMillis) {
                         Log.d(TAG, "Freezing conditions detected for $freezeDurationHours hours or more")
-                        return true
+                        return WeatherCheckResult(
+                            isFreezing = true,
+                            currentTemperature = currentTemperature,
+                            forecastTemperatures = temperatures.take(freezeDurationHours + 1)
+                        )
                     }
                 } else {
                     isCurrentlyFreezing = false
                 }
             }
+            
+            return WeatherCheckResult(
+                isFreezing = false,
+                currentTemperature = currentTemperature,
+                forecastTemperatures = temperatures.take(freezeDurationHours + 1)
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Error parsing forecast for freeze", e)
+            return WeatherCheckResult(isFreezing = false)
         }
-        return false
+    }
+
+    private suspend fun parseForecastForFreeze(forecastHourlyJson: String): Boolean {
+        return parseForecastForFreezeWithDetails(forecastHourlyJson).isFreezing
     }
 
     suspend fun getCurrentWeather(): String {
@@ -363,6 +582,27 @@ class WeatherRepository(private val context: Context) {
      */
     fun getCurrentStations(): List<StationObservation> {
         return currentStations
+    }
+    
+    /**
+     * Returns the number of stations used in the last weather check
+     */
+    fun getLastStationCount(): Int? {
+        return lastStationCount
+    }
+    
+    /**
+     * Returns the weighted percentage from the last weather check
+     */
+    fun getLastWeightedPercentage(): Double? {
+        return lastWeightedPercentage
+    }
+    
+    /**
+     * Returns whether the last weather check used multi-station approach
+     */
+    fun lastUsedMultiStationApproach(): Boolean? {
+        return lastMultiStationApproach
     }
     
     /**

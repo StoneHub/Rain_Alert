@@ -234,15 +234,30 @@ class MultiStationWeatherService(private val context: Context) {
         observations: List<StationObservation>,
         rainProbabilityThreshold: Int
     ): Boolean {
+        return analyzeForRainWithDetails(observations, rainProbabilityThreshold).first
+    }
+    
+    /**
+     * Analyzes multiple station observations to determine if rain is likely,
+     * and returns both the result and weighted percentage
+     * 
+     * @param observations List of station observations
+     * @param rainProbabilityThreshold Minimum percentage of stations reporting rain to trigger alert
+     * @return Pair<Boolean, Double> of rain likelihood result and weighted percentage
+     */
+    fun analyzeForRainWithDetails(
+        observations: List<StationObservation>,
+        rainProbabilityThreshold: Int
+    ): Pair<Boolean, Double> {
         if (observations.isEmpty()) {
-            return false
+            return Pair(false, 0.0)
         }
         
         // Get stations reporting rain
         val rainingStations = observations.filter { it.isRaining() }
         
         if (rainingStations.isEmpty()) {
-            return false
+            return Pair(false, 0.0)
         }
         
         // Calculate weighted probability based on distance
@@ -262,8 +277,8 @@ class MultiStationWeatherService(private val context: Context) {
             Log.d(TAG, "Station: ${station.station.name}, Distance: ${String.format("%.1f", station.station.distance)} km, Status: $isRaining, Weight: ${String.format("%.4f", weight)}")
         }
         
-        // Return true if weighted percentage exceeds threshold
-        return rainingPercentage >= rainProbabilityThreshold
+        // Return pair of result and weighted percentage
+        return Pair(rainingPercentage >= rainProbabilityThreshold, rainingPercentage)
     }
     
     /**
@@ -287,15 +302,30 @@ class MultiStationWeatherService(private val context: Context) {
         observations: List<StationObservation>,
         freezeThresholdF: Double
     ): Boolean {
+        return analyzeForFreezeWithDetails(observations, freezeThresholdF).first
+    }
+    
+    /**
+     * Analyzes station observations to check for freeze conditions,
+     * and returns both the result and weighted percentage
+     * 
+     * @param observations List of station observations
+     * @param freezeThresholdF Temperature threshold for freeze warning in °F
+     * @return Pair<Boolean, Double> of freeze likelihood result and weighted percentage
+     */
+    fun analyzeForFreezeWithDetails(
+        observations: List<StationObservation>,
+        freezeThresholdF: Double
+    ): Pair<Boolean, Double> {
         if (observations.isEmpty()) {
-            return false
+            return Pair(false, 0.0)
         }
         
         // Get stations reporting freezing conditions
         val freezingStations = observations.filter { it.isFreezing(freezeThresholdF) }
         
         if (freezingStations.isEmpty()) {
-            return false
+            return Pair(false, 0.0)
         }
         
         // Calculate weighted probability based on distance
@@ -315,7 +345,7 @@ class MultiStationWeatherService(private val context: Context) {
             Log.d(TAG, "Station: ${station.station.name}, Distance: ${String.format("%.1f", station.station.distance)} km, Temp: $temp, Status: $isFreezing, Weight: ${String.format("%.4f", weight)}")
         }
         
-        // Consider it freezing if weighted percentage is at least 50%
-        return freezingPercentage >= 50
+        // Return pair of result and weighted percentage
+        return Pair(freezingPercentage >= 50, freezingPercentage)
     }
 }

@@ -11,13 +11,17 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.stoneCode.rain_alert.data.AppConfig
 import com.stoneCode.rain_alert.data.UserPreferences
+import com.stoneCode.rain_alert.feedback.AlertFeedbackManager
 import com.stoneCode.rain_alert.firebase.FirebaseLogger
+import com.stoneCode.rain_alert.firebase.FirestoreManager
+import com.stoneCode.rain_alert.firebase.StationContribution
 import com.stoneCode.rain_alert.repository.WeatherRepository
 import com.stoneCode.rain_alert.util.EnhancedNotificationHelper
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +31,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import java.util.UUID
 
 interface ServiceStatusListener {
     fun onServiceStatusChanged(isRunning: Boolean)
@@ -40,6 +45,8 @@ class RainService : Service() {
     private lateinit var notificationHelper: EnhancedNotificationHelper
     private lateinit var userPreferences: UserPreferences
     private lateinit var firebaseLogger: FirebaseLogger
+    private lateinit var firestoreManager: FirestoreManager
+    private lateinit var alertFeedbackManager: AlertFeedbackManager
 
     companion object {
         var isRunning = false
@@ -60,6 +67,11 @@ class RainService : Service() {
         notificationHelper = EnhancedNotificationHelper(this)
         userPreferences = UserPreferences(this)
         firebaseLogger = FirebaseLogger.getInstance()
+        firestoreManager = FirestoreManager.getInstance()
+        alertFeedbackManager = AlertFeedbackManager.getInstance(this)
+        
+        // Initialize Firestore
+        firestoreManager.initialize(this)
         
         isRunning = true
         statusListener?.onServiceStatusChanged(true)
@@ -155,17 +167,84 @@ class RainService : Service() {
                 Manifest.permission.ACCESS_FINE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
         ) {
-            val isRaining = weatherRepository.checkForRain()
-            Log.d("RainService", "isRaining check: $isRaining")
+            // Start timing the algorithm execution
+            val startTime = SystemClock.elapsedRealtime()
             
-            // Log weather check to Firebase
+            // Get detailed information about the algorithm execution
+            val rainCheckResult = weatherRepository.checkForRainWithDetails()
+            val isRaining = rainCheckResult.isRaining
+            val calculationTimeMs = SystemClock.elapsedRealtime() - startTime
+            
+            Log.d("RainService", "isRaining check: $isRaining (took ${calculationTimeMs}ms)")
+            
+            // Log enhanced metrics to Firebase Analytics
             val precipitationChance = weatherRepository.getPrecipitationChance()
             firebaseLogger.logWeatherCheck(
                 isRaining = isRaining,
                 isFreezing = false,
                 precipitationChance = precipitationChance,
-                temperature = null
+                temperature = null,
+                stationCount = rainCheckResult.stationsUsed,
+                maxStationDistance = rainCheckResult.maxDistance,
+                calculationTimeMs = calculationTimeMs,
+                algorithmType = if (rainCheckResult.usedMultiStationApproach) "multi_station" else "forecast"
             )
+            
+            // Log detailed algorithm performance metrics
+            firebaseLogger.logAlgorithmPerformance(
+                algorithmType = "rain_detection",
+                calculationTimeMs = calculationTimeMs,
+                numStationsUsed = rainCheckResult.stationsUsed ?: 0,
+                maxDistance = rainCheckResult.maxDistance ?: 0.0,
+                weightingMethod = "inverse_distance",
+                successful = true
+            )
+            
+            // Store detailed data in Firestore if rain is detected
+            if (isRaining) {
+                val alertId = UUID.randomUUID().toString()
+                val location = weatherRepository.getLastKnownLocation()
+                
+                if (location != null) {
+                    // Store detailed alert data in Firestore
+                    serviceScope.launch(Dispatchers.IO) {
+                        try {
+                            val stationContributions = rainCheckResult.stationDetails?.map { station ->
+                                StationContribution(
+                                    stationId = station.id,
+                                    stationName = station.name,
+                                    distance = station.distance,
+                                    weight = station.weight,
+                                    isPositive = station.isReportingRain,
+                                    temperature = station.temperature,
+                                    precipitation = station.precipitation,
+                                    textDescription = station.textDescription,
+                                    observationTime = station.observationTime
+                                )
+                            } ?: emptyList()
+
+                            firestoreManager.recordRainAlert(
+                                timestamp = System.currentTimeMillis(),
+                                location = mapOf("latitude" to location.latitude, "longitude" to location.longitude),
+                                stationData = stationContributions,
+                                weightedPercentage = rainCheckResult.weightedPercentage ?: 0.0,
+                                thresholdUsed = rainCheckResult.thresholdUsed ?: 50.0,
+                                wasUsingMultiStationApproach = rainCheckResult.usedMultiStationApproach,
+                                precipitationChance = precipitationChance,
+                                alertId = alertId
+                            )
+                            
+                            // Register the alert for feedback collection after delay
+                            alertFeedbackManager.recordAlert(alertId, "rain", System.currentTimeMillis())
+                            alertFeedbackManager.scheduleFeedbackRequest(alertId, 30) // Request feedback after 30 minutes
+                            
+                            Log.d("RainService", "Recorded detailed rain alert data with ID: $alertId")
+                        } catch (e: Exception) {
+                            Log.e("RainService", "Error recording rain alert data to Firestore: ${e.message}")
+                        }
+                    }
+                }
+            }
             
             return isRaining
         } else {
@@ -175,16 +254,87 @@ class RainService : Service() {
     }
 
     private suspend fun isFreezing(): Boolean {
-        val isFreezing = weatherRepository.checkForFreezeWarning()
-        Log.d("RainService", "isFreezing check: $isFreezing")
+        // Start timing the algorithm execution
+        val startTime = SystemClock.elapsedRealtime()
         
-        // Log weather check to Firebase
+        // Get detailed information about the algorithm execution
+        val freezeCheckResult = weatherRepository.checkForFreezeWarningWithDetails()
+        val isFreezing = freezeCheckResult.isFreezing
+        val calculationTimeMs = SystemClock.elapsedRealtime() - startTime
+        
+        Log.d("RainService", "isFreezing check: $isFreezing (took ${calculationTimeMs}ms)")
+        
+        // Log enhanced metrics to Firebase Analytics
+        val freezeThreshold = userPreferences.freezeThreshold.first()
         firebaseLogger.logWeatherCheck(
             isRaining = false,
             isFreezing = isFreezing,
             precipitationChance = null,
-            temperature = userPreferences.freezeThreshold.first()
+            temperature = freezeThreshold,
+            stationCount = freezeCheckResult.stationsUsed,
+            maxStationDistance = freezeCheckResult.maxDistance,
+            calculationTimeMs = calculationTimeMs,
+            algorithmType = if (freezeCheckResult.usedMultiStationApproach) "multi_station" else "forecast"
         )
+        
+        // Log detailed algorithm performance metrics
+        firebaseLogger.logAlgorithmPerformance(
+            algorithmType = "freeze_detection",
+            calculationTimeMs = calculationTimeMs,
+            numStationsUsed = freezeCheckResult.stationsUsed ?: 0,
+            maxDistance = freezeCheckResult.maxDistance ?: 0.0,
+            weightingMethod = "inverse_distance",
+            successful = true
+        )
+        
+        // Store detailed data in Firestore if freezing conditions are detected
+        if (isFreezing) {
+            val alertId = UUID.randomUUID().toString()
+            val location = weatherRepository.getLastKnownLocation()
+            
+            if (location != null) {
+                // Store detailed alert data in Firestore
+                serviceScope.launch(Dispatchers.IO) {
+                    try {
+                        val stationContributions = freezeCheckResult.stationDetails?.map { station ->
+                            StationContribution(
+                                stationId = station.id,
+                                stationName = station.name,
+                                distance = station.distance,
+                                weight = station.weight,
+                                isPositive = station.isReportingFreeze,
+                                temperature = station.temperature,
+                                precipitation = null,
+                                textDescription = station.textDescription,
+                                observationTime = station.observationTime
+                            )
+                        }
+
+                        val freezeDurationHours = userPreferences.freezeDurationHours.first()
+                        
+                        firestoreManager.recordFreezeWarning(
+                            timestamp = System.currentTimeMillis(),
+                            location = mapOf("latitude" to location.latitude, "longitude" to location.longitude),
+                            stationData = stationContributions,
+                            currentTemperature = freezeCheckResult.currentTemperature ?: 0.0,
+                            forecastTemperatures = freezeCheckResult.forecastTemperatures,
+                            thresholdUsed = freezeThreshold,
+                            durationHours = freezeDurationHours,
+                            wasUsingMultiStationApproach = freezeCheckResult.usedMultiStationApproach,
+                            alertId = alertId
+                        )
+                        
+                        // Register the alert for feedback collection after delay
+                        alertFeedbackManager.recordAlert(alertId, "freeze", System.currentTimeMillis())
+                        alertFeedbackManager.scheduleFeedbackRequest(alertId, 120) // Request feedback after 2 hours
+                        
+                        Log.d("RainService", "Recorded detailed freeze warning data with ID: $alertId")
+                    } catch (e: Exception) {
+                        Log.e("RainService", "Error recording freeze warning data to Firestore: ${e.message}")
+                    }
+                }
+            }
+        }
         
         return isFreezing
     }
@@ -193,6 +343,37 @@ class RainService : Service() {
     private fun simulateRain() {
         serviceScope.launch {
             firebaseLogger.logSimulation("rain", true)
+            
+            // Create a simulated alert ID for the test
+            val alertId = UUID.randomUUID().toString()
+            val location = weatherRepository.getLastKnownLocation()
+            
+            if (location != null) {
+                // Store simulated alert data for testing
+                serviceScope.launch(Dispatchers.IO) {
+                    try {
+                        firestoreManager.recordRainAlert(
+                            timestamp = System.currentTimeMillis(),
+                            location = mapOf("latitude" to location.latitude, "longitude" to location.longitude),
+                            stationData = emptyList(), // No real station data for simulation
+                            weightedPercentage = 75.0,
+                            thresholdUsed = 50.0,
+                            wasUsingMultiStationApproach = true,
+                            precipitationChance = 80,
+                            alertId = alertId
+                        )
+                        
+                        // Register the simulated alert for feedback collection
+                        alertFeedbackManager.recordAlert(alertId, "rain", System.currentTimeMillis())
+                        alertFeedbackManager.scheduleFeedbackRequest(alertId, 5) // Request feedback after just 5 minutes for testing
+                        
+                        Log.d("RainService", "Recorded simulated rain alert with ID: $alertId")
+                    } catch (e: Exception) {
+                        Log.e("RainService", "Error recording simulated rain alert: ${e.message}")
+                    }
+                }
+            }
+            
             sendRainNotification()
             Log.d("RainService", "Rain simulation triggered")
         }
@@ -202,6 +383,42 @@ class RainService : Service() {
     private fun simulateFreeze() {
         serviceScope.launch {
             firebaseLogger.logSimulation("freeze", true)
+            
+            // Create a simulated alert ID for the test
+            val alertId = UUID.randomUUID().toString()
+            val location = weatherRepository.getLastKnownLocation()
+            
+            if (location != null) {
+                // Store simulated alert data for testing
+                serviceScope.launch(Dispatchers.IO) {
+                    try {
+                        val freezeThreshold = userPreferences.freezeThreshold.first()
+                        val freezeDurationHours = userPreferences.freezeDurationHours.first()
+                        
+                        firestoreManager.recordFreezeWarning(
+                            timestamp = System.currentTimeMillis(),
+                            location = mapOf("latitude" to location.latitude, "longitude" to location.longitude),
+                            stationData = null, // No real station data for simulation
+                            currentTemperature = freezeThreshold - 5.0, // 5 degrees below threshold
+                            forecastTemperatures = listOf(freezeThreshold - 3.0, freezeThreshold - 4.0, 
+                                                          freezeThreshold - 5.0, freezeThreshold - 3.0),
+                            thresholdUsed = freezeThreshold,
+                            durationHours = freezeDurationHours,
+                            wasUsingMultiStationApproach = false,
+                            alertId = alertId
+                        )
+                        
+                        // Register the simulated alert for feedback collection
+                        alertFeedbackManager.recordAlert(alertId, "freeze", System.currentTimeMillis())
+                        alertFeedbackManager.scheduleFeedbackRequest(alertId, 5) // Request feedback after just 5 minutes for testing
+                        
+                        Log.d("RainService", "Recorded simulated freeze warning with ID: $alertId")
+                    } catch (e: Exception) {
+                        Log.e("RainService", "Error recording simulated freeze warning: ${e.message}")
+                    }
+                }
+            }
+            
             sendFreezeWarningNotification()
             Log.d("RainService", "Freeze simulation triggered")
         }
@@ -227,6 +444,15 @@ class RainService : Service() {
                 precipitation = precipitationChance
             )
             
+            // Log enhanced notification metrics
+            firebaseLogger.logNotificationSent(
+                notificationType = "rain", 
+                stationCount = weatherRepository.getLastStationCount(),
+                weightedPercentage = weatherRepository.getLastWeightedPercentage(),
+                thresholdUsed = userPreferences.rainProbabilityThreshold.first().toDouble(),
+                useMultiStationApproach = weatherRepository.lastUsedMultiStationApproach()
+            )
+            
             Log.d("RainService", "Enhanced rain notification sent")
         } else {
             Log.w("RainService", "Could not get location for rain notification")
@@ -250,6 +476,15 @@ class RainService : Service() {
                 notification,
                 weatherInfo = weatherInfo,
                 temperature = freezeThreshold
+            )
+            
+            // Log enhanced notification metrics
+            firebaseLogger.logNotificationSent(
+                notificationType = "freeze", 
+                stationCount = weatherRepository.getLastStationCount(),
+                weightedPercentage = weatherRepository.getLastWeightedPercentage(),
+                thresholdUsed = freezeThreshold,
+                useMultiStationApproach = weatherRepository.lastUsedMultiStationApproach()
             )
             
             Log.d("RainService", "Enhanced freeze warning notification sent")

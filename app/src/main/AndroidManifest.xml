@@ -69,5 +69,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        
+        <!-- Feedback Activity for post-alert user feedback -->
+        <activity
+            android:name="com.stoneCode.rain_alert.feedback.FeedbackActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Rain_Alert"
+            android:label="Weather Alert Feedback" />
     </application>
 </manifest>
