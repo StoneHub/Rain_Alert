@@ -205,7 +205,7 @@ fun SharedMapComponent(
                     visibleBounds
                 )
                 
-                // After updating the camera and bounds, refresh the radar data
+                // Let the viewmodel decide if we should fetch radar data based on debouncing
                 if (activeLayer != RadarMapViewModel.WeatherLayer.NONE) {
                     radarMapViewModel.fetchRadarData(currentPos.target)
                 }

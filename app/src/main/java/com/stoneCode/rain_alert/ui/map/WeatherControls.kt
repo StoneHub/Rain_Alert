@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.AirplanemodeActive
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -45,9 +46,13 @@ fun WeatherControls(
                 Icon(
                     Icons.Default.WaterDrop,
                     contentDescription = null,
-                    tint = if (showPrecipitationLayer) MaterialTheme.colorScheme.primary else Color.Gray
+                    tint = if (showPrecipitationLayer) MaterialTheme.colorScheme.onPrimary else Color.Gray
                 )
-            }
+            },
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+            )
         )
         
         // Wind layer toggle
@@ -59,9 +64,13 @@ fun WeatherControls(
                 Icon(
                     Icons.Default.AirplanemodeActive,
                     contentDescription = null,
-                    tint = if (showWindLayer) MaterialTheme.colorScheme.primary else Color.Gray
+                    tint = if (showWindLayer) MaterialTheme.colorScheme.onSecondary else Color.Gray
                 )
-            }
+            },
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.9f),
+                selectedLabelColor = MaterialTheme.colorScheme.onSecondary
+            )
         )
         
         // Temperature layer toggle

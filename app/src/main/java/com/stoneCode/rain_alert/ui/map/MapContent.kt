@@ -73,7 +73,7 @@ fun MapContent(
             WeatherOverlay(
                 imageUrl = precipitationRadarUrl,
                 visible = true,
-                transparency = 0.3f,
+                transparency = 0.5f, // Increased from 0.3f for better visibility
                 zIndex = 1f
             )
         }
