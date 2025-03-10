@@ -48,10 +48,44 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.stoneCode.rain_alert.api.WeatherStation
 import com.stoneCode.rain_alert.viewmodel.RadarMapViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/**
+ * Helper function to calculate map bounds from a center point and zoom level
+ * This is needed because the map's projection might not be available immediately
+ */
+private fun calculateBoundsFromCenterAndZoom(center: LatLng, zoom: Float): LatLngBounds? {
+    try {
+        // Earth radius in meters
+        val earthRadius = 6371000.0
+        val latRadians = Math.toRadians(center.latitude)
+        
+        // Calculate meters per pixel at given latitude and zoom level
+        val metersPerPx = earthRadius * Math.cos(latRadians) * 2 * Math.PI / Math.pow(2.0, zoom.toDouble() + 8)
+        
+        // Approximate width and height of the viewport in meters
+        val widthMeters = 1000.0 * metersPerPx  // Assuming 1000px width
+        val heightMeters = 600.0 * metersPerPx   // Assuming 600px height
+        
+        // Calculate lat/lng span based on distance
+        val latSpan = heightMeters / earthRadius * (180.0 / Math.PI)
+        val lngSpan = widthMeters / (earthRadius * Math.cos(latRadians)) * (180.0 / Math.PI)
+        
+        // Create bounds
+        return LatLngBounds.builder()
+            .include(LatLng(center.latitude - latSpan/2, center.longitude - lngSpan/2))
+            .include(LatLng(center.latitude + latSpan/2, center.longitude + lngSpan/2))
+            .build()
+    } catch (e: Exception) {
+        Log.e("SharedMapComponent", "Error calculating bounds", e)
+        return null
+    }
+}
 
 /**
  * A shared map component that can be used in both carousel and fullscreen modes.
@@ -120,22 +154,42 @@ fun SharedMapComponent(
     // Initialize map only once
     val initialized = remember { mutableStateOf(false) }
     
-    // Setup initial map position
-    LaunchedEffect(myLocation, displayMode) {
-        if (!initialized.value) {
-            val locationToUse = myLocation ?: lastLocation ?: centerLatLng
-            val zoom = if (displayMode == MapDisplayMode.FULLSCREEN) 12f else 9f
-            
-            cameraPositionState.position = CameraPosition.fromLatLngZoom(locationToUse, zoom)
-            radarMapViewModel.updateMapCenter(locationToUse)
-            radarMapViewModel.updateMapZoom(zoom)
-            
-            if (myLocation != null) {
-                radarMapViewModel.updateLastKnownLocation(myLocation)
-            }
-            
-            initialized.value = true
+    // Initialize map and fetch radar data - IMPORTANT for carousel mode
+    LaunchedEffect(key1 = displayMode, key2 = myLocation) {
+        val locationToUse = myLocation ?: lastLocation ?: centerLatLng
+        val zoom = if (displayMode == MapDisplayMode.FULLSCREEN) 12f else 9f
+        
+        // Update camera position
+        cameraPositionState.position = CameraPosition.fromLatLngZoom(locationToUse, zoom)
+        
+        // Update viewModel with current location and zoom
+        radarMapViewModel.updateMapCenter(locationToUse)
+        radarMapViewModel.updateMapZoom(zoom)
+        
+        // Save last known location
+        if (myLocation != null) {
+            radarMapViewModel.updateLastKnownLocation(myLocation)
         }
+        
+        // Calculate bounds for radar data
+        val bounds = calculateBoundsFromCenterAndZoom(locationToUse, zoom)
+        if (bounds != null) {
+            // Update camera with calculated bounds
+            radarMapViewModel.updateMapCamera(
+                locationToUse,
+                zoom,
+                bounds
+            )
+            
+            // Force fetch radar data immediately - important for carousel mode
+            Log.d("SharedMapComponent", "Forcing radar data fetch for $displayMode mode")
+            radarMapViewModel.fetchRadarData(locationToUse)
+            
+            // Small delay to ensure fetching completes
+            delay(500)
+        }
+        
+        initialized.value = true
     }
     
     // Track camera position changes
@@ -152,12 +206,24 @@ fun SharedMapComponent(
                 )
                 
                 // After updating the camera and bounds, refresh the radar data
-                if (activeLayer == RadarMapViewModel.WeatherLayer.PRECIPITATION || 
-                    activeLayer == RadarMapViewModel.WeatherLayer.WIND || 
-                    activeLayer == RadarMapViewModel.WeatherLayer.TEMPERATURE) {
+                if (activeLayer != RadarMapViewModel.WeatherLayer.NONE) {
                     radarMapViewModel.fetchRadarData(currentPos.target)
                 }
             }
+        }
+    }
+    
+    // Additional effect to ensure radar data is loaded after initialization
+    // This is critical for carousel mode to show radar data without requiring user interaction
+    LaunchedEffect(initialized.value, activeLayer) {
+        if (initialized.value) {
+            // Add a small delay to ensure map is fully loaded
+            delay(1000)
+            
+            // Force fetch radar data again after initialization
+            val locationToUse = myLocation ?: lastLocation ?: centerLatLng
+            Log.d("SharedMapComponent", "Ensuring radar data is loaded for $activeLayer after initialization")
+            radarMapViewModel.fetchRadarData(locationToUse)
         }
     }
     
@@ -219,10 +285,24 @@ fun SharedMapComponent(
                     }
                 }
             },
-            onRefresh = onRefresh,
+            onRefresh = {
+                onRefresh()
+                // Force radar data refresh when requested explicitly in carousel mode
+                radarMapViewModel.refreshRadarData()
+            },
             onToggleFullScreen = onToggleFullScreen,
             onChangeLocationClick = onChangeLocationClick,
-            onToggleLayer = { layer -> radarMapViewModel.toggleLayer(layer) },
+            onToggleLayer = { layer -> 
+                radarMapViewModel.toggleLayer(layer)
+                // Force fetch data when layer is changed in carousel mode
+                // Add a small delay to ensure the layer change is processed first
+                coroutineScope.launch {
+                    delay(300) // Brief delay to ensure layer toggle is processed
+                    val currentPos = cameraPositionState.position
+                    Log.d("SharedMapComponent", "Refreshing radar data after changing to layer: $layer")
+                    radarMapViewModel.fetchRadarData(currentPos.target)
+                }
+            },
             showControls = showControls,
             onToggleControls = { showControls = !showControls }
         )
@@ -316,10 +396,7 @@ private fun FullscreenMapView(
                 windRadarUrl = windRadarUrl,
                 temperatureRadarUrl = temperatureRadarUrl,
                 onMapLoaded = {
-                    if (myLocation != null && !initialized.value) {
-                        // The map is loaded, we can initialize it with the user's location
-                        initialized.value = true
-                    }
+                    Log.d("SharedMapComponent", "Map loaded in fullscreen mode")
                 },
                 fullScreen = true
             )

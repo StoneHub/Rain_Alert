@@ -167,14 +167,14 @@ fun MainScreen(
                 // Left section with App title and Switch grouped together
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(start = 8.dp)
+                    modifier = Modifier.padding(start = 8.dp,top = 8.dp, bottom = 8.dp)
                 ) {
                     // App Title
                     AppTitle(compact = true)
-                    
+
                     // Add spacing between title and switch
                     Spacer(modifier = Modifier.width(4.dp))
-                    
+
                     // Weather Alert Service Switch with text labels
                     Box(
                         modifier = Modifier
@@ -229,7 +229,7 @@ fun MainScreen(
                         }
                     }
                 }
-                
+
                 // Right section with navigation icons - pushed to the right
                 Row {
                     // Help/Info button
