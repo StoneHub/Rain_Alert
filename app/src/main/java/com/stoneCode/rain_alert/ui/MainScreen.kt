@@ -156,57 +156,81 @@ fun MainScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding() // This will add necessary padding for status bar
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 4.dp, vertical = 8.dp)
                     .background(
                         color = MaterialTheme.colorScheme.surface,
                         shape = RoundedCornerShape(12.dp)
                     ),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.SpaceBetween, // Changed to SpaceBetween for proper layout
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // App Title with improved visibility
-                Box(modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 8.dp)) {
-                    AppTitle(compact = true)
-                }
-
-                // Weather Alert Service Switch with text labels
+                // Left section with App title and Switch grouped together
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(end = 8.dp)
+                    modifier = Modifier.padding(start = 8.dp)
                 ) {
-                    Switch(
-                        checked = isServiceRunning,
-                        onCheckedChange = { isChecked ->
-                            if (isChecked) onStartServiceClick() else onStopServiceClick()
-                        },
-                        thumbContent = {
-                            Icon(
-                                imageVector = Icons.Default.WaterDrop,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = if (isServiceRunning)
-                                    MaterialTheme.colorScheme.primary
-                                else
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.primary,
-                            checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
-                        )
-                    )
+                    // App Title
+                    AppTitle(compact = true)
+                    
+                    // Add spacing between title and switch
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = if (isServiceRunning) "Alerts On" else "Alerts Off",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
+                    
+                    // Weather Alert Service Switch with text labels
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                color = if (isServiceRunning)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(20.dp)
+                            )
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (isServiceRunning) "On" else "Off",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = if (isServiceRunning)
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 12.dp, end = 8.dp)
+                            )
 
-                // Navigation icons
+                            Switch(
+                                checked = isServiceRunning,
+                                onCheckedChange = { isChecked ->
+                                    if (isChecked) onStartServiceClick() else onStopServiceClick()
+                                },
+                                thumbContent = {
+                                    Icon(
+                                        imageVector = Icons.Default.WaterDrop,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = if (isServiceRunning)
+                                            MaterialTheme.colorScheme.onPrimary
+                                        else
+                                            MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                                    checkedBorderColor = MaterialTheme.colorScheme.primary,
+                                    checkedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                    uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    uncheckedBorderColor = MaterialTheme.colorScheme.outline,
+                                    uncheckedIconColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            )
+                        }
+                    }
+                }
+                
+                // Right section with navigation icons - pushed to the right
                 Row {
                     // Help/Info button
                     IconButton(onClick = { showHelpDialog = true }) {
@@ -432,107 +456,122 @@ fun HelpDialog(
     onOpenAppSettings: () -> Unit,
     onOpenBatterySettings: () -> Unit
 ) {
+    // Using a custom dialog layout to fix scrolling issues
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = "Rain Alert Help",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        },
+        // No title parameter - we'll include it in the content
         text = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .height(400.dp)  // Fixed height to ensure dialog is properly sized
             ) {
-                // What the app does
-                SectionWithIcon(
-                    icon = Icons.Default.WaterDrop,
-                    title = "What Rain Alert Does",
-                    description = "Monitors local weather stations for precipitation and freezing conditions, alerting you when potentially dangerous weather is detected."
-                )
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                // How it works
-                SectionWithIcon(
-                    icon = Icons.Default.LocationOn,
-                    title = "How It Works",
-                    description = "Aggregates data from multiple nearby weather stations, weighing their reliability based on distance. The app periodically checks conditions in the background to deliver timely alerts."
-                )
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                // Required permissions
-                SectionWithIcon(
-                    icon = Icons.Default.Notifications,
-                    title = "Required Permissions",
-                    description = "• Location: To find nearest weather stations\n• Notifications: For weather alerts\n• Background service: For continuous monitoring"
-                )
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                // Troubleshooting
-                SectionWithIcon(
-                    icon = Icons.Default.BatteryAlert,
-                    title = "Troubleshooting",
-                    description = "• Ensure location permissions are granted\n• Disable battery optimization to prevent background service interruptions\n• Check notification settings if alerts aren't appearing"
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = onDismiss
-            ) {
-                Text("Close")
-            }
-        },
-        dismissButton = {
-            Column {
-                OutlinedButton(
-                    onClick = onOpenAppSettings,
-                    modifier = Modifier.fillMaxWidth()
+                // Title section
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(bottom = 16.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.CheckCircle,
+                        imageVector = Icons.Default.Info,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Check Permissions")
+                    Text(
+                        text = "Rain Alert Help",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedButton(
-                    onClick = onOpenBatterySettings,
-                    modifier = Modifier.fillMaxWidth()
+                // Scrollable content area
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.BatteryAlert,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                    // What the app does
+                    SectionWithIcon(
+                        icon = Icons.Default.WaterDrop,
+                        title = "What Rain Alert Does",
+                        description = "Monitors local weather stations for precipitation and freezing conditions, alerting you when potentially dangerous weather is detected."
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Battery Optimization")
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    // How it works
+                    SectionWithIcon(
+                        icon = Icons.Default.LocationOn,
+                        title = "How It Works",
+                        description = "Aggregates data from multiple nearby weather stations, weighing their reliability based on distance. The app periodically checks conditions in the background to deliver timely alerts."
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    // Required permissions
+                    SectionWithIcon(
+                        icon = Icons.Default.Notifications,
+                        title = "Required Permissions",
+                        description = "• Location: To find nearest weather stations\n• Notifications: For weather alerts\n• Background service: For continuous monitoring"
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    // Troubleshooting
+                    SectionWithIcon(
+                        icon = Icons.Default.BatteryAlert,
+                        title = "Troubleshooting",
+                        description = "• Ensure location permissions are granted\n• Disable battery optimization to prevent background service interruptions\n• Check notification settings if alerts aren't appearing"
+                    )
+                }
+
+                // Buttons section - outside the scroll area
+                Column(modifier = Modifier.padding(top = 16.dp)) {
+                    OutlinedButton(
+                        onClick = onOpenAppSettings,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Check Permissions")
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedButton(
+                        onClick = onOpenBatterySettings,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BatteryAlert,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Battery Optimization")
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Close")
+                    }
                 }
             }
         },
+        // These are now null since we're handling everything in the content
+        confirmButton = {},
+        dismissButton = {},
         containerColor = MaterialTheme.colorScheme.surface,
-        titleContentColor = MaterialTheme.colorScheme.onSurface,
         textContentColor = MaterialTheme.colorScheme.onSurfaceVariant
     )
 }
