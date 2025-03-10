@@ -29,7 +29,8 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     onBackPressed: () -> Unit,
     onSimulateRainClick: () -> Unit = {},
-    onSimulateFreezeClick: () -> Unit = {}
+    onSimulateFreezeClick: () -> Unit = {},
+    onPrivacyPolicyClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -386,6 +387,16 @@ fun SettingsScreen(
             
             Spacer(modifier = Modifier.height(32.dp))
             
+            // Privacy Policy button
+            OutlinedButton(
+                onClick = onPrivacyPolicyClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Privacy Policy")
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
             // Done button at the end
             Button(
                 onClick = onBackPressed,
@@ -407,7 +418,8 @@ fun PreviewSettingsScreen() {
         SettingsScreen(
             onBackPressed = {},
             onSimulateRainClick = {},
-            onSimulateFreezeClick = {}
+            onSimulateFreezeClick = {},
+            onPrivacyPolicyClick = {}
         )
     }
 }

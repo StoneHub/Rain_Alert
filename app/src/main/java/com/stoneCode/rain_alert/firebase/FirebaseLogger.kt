@@ -267,6 +267,78 @@ class FirebaseLogger private constructor() {
             Log.e(TAG, "Error logging algorithm performance: ${e.message}")
         }
     }
+    
+    /**
+     * Log when the app is opened (session start)
+     */
+    fun logAppOpen() {
+        try {
+            val bundle = Bundle().apply {
+                putLong("timestamp", System.currentTimeMillis())
+            }
+            firebaseAnalytics.logEvent(FirebaseAnalytics.Event.APP_OPEN, bundle)
+            Log.d(TAG, "Logged app open event")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error logging app open: ${e.message}")
+        }
+    }
+    
+    /**
+     * Log when app is updated to a new version
+     */
+    fun logAppUpdate(
+        oldVersionCode: Int,
+        newVersionCode: Int,
+        oldVersionName: String,
+        newVersionName: String
+    ) {
+        try {
+            val bundle = Bundle().apply {
+                putInt("old_version_code", oldVersionCode)
+                putInt("new_version_code", newVersionCode)
+                putString("old_version_name", oldVersionName)
+                putString("new_version_name", newVersionName)
+                putLong("update_time", System.currentTimeMillis())
+            }
+            firebaseAnalytics.logEvent("app_updated", bundle)
+            Log.d(TAG, "Logged app update from $oldVersionName to $newVersionName")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error logging app update: ${e.message}")
+        }
+    }
+    
+    /**
+     * Log screen view analytics
+     */
+    fun logScreenView(screenName: String, screenClass: String) {
+        try {
+            val bundle = Bundle().apply {
+                putString(FirebaseAnalytics.Param.SCREEN_NAME, screenName)
+                putString(FirebaseAnalytics.Param.SCREEN_CLASS, screenClass)
+            }
+            firebaseAnalytics.logEvent(FirebaseAnalytics.Event.SCREEN_VIEW, bundle)
+            Log.d(TAG, "Logged screen view: $screenName")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error logging screen view: ${e.message}")
+        }
+    }
+    
+    /**
+     * Log user engagement metrics
+     */
+    fun logUserEngagement(featureName: String, durationSeconds: Long) {
+        try {
+            val bundle = Bundle().apply {
+                putString("feature_name", featureName)
+                putLong("engagement_time_sec", durationSeconds)
+                putLong("timestamp", System.currentTimeMillis())
+            }
+            firebaseAnalytics.logEvent("user_engagement", bundle)
+            Log.d(TAG, "Logged user engagement: $featureName for $durationSeconds seconds")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error logging user engagement: ${e.message}")
+        }
+    }
 
     companion object {
         @Volatile

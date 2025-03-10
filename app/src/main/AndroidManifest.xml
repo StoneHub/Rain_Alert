@@ -62,13 +62,19 @@
         </receiver>
 
         <activity
-            android:name="com.stoneCode.rain_alert.MainActivity"
+            android:name="com.stoneCode.rain_alert.SplashActivity"
             android:exported="true"
-            android:theme="@style/Theme.Rain_Alert">
+            android:theme="@style/Theme.Rain_Alert.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
+        
+        <activity
+            android:name="com.stoneCode.rain_alert.MainActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Rain_Alert">
         </activity>
         
         <!-- Feedback Activity for post-alert user feedback -->

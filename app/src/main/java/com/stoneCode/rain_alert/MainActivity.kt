@@ -15,9 +15,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.stoneCode.rain_alert.firebase.FirebaseLogger
 import com.stoneCode.rain_alert.repository.WeatherRepository
@@ -110,6 +113,23 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun AppNavigation() {
         val navController = rememberNavController()
+        
+        // Log screen views when navigation destination changes
+        val currentBackStackEntry by navController.currentBackStackEntryAsState()
+        
+        LaunchedEffect(currentBackStackEntry) {
+            currentBackStackEntry?.destination?.route?.let { route ->
+                val screenName = when (route) {
+                    "main" -> "Main Screen"
+                    "alert_history" -> "Alert History"
+                    "settings" -> "Settings"
+                    "weather_map" -> "Weather Map"
+                    "privacy_policy" -> "Privacy Policy"
+                    else -> route
+                }
+                firebaseLogger.logScreenView(screenName, "MainActivity")
+            }
+        }
         
         NavHost(navController = navController, startDestination = "main") {
             composable("main") {
@@ -208,6 +228,17 @@ class MainActivity : ComponentActivity() {
                         } else {
                             startService(simulateFreezeIntent)
                         }
+                    },
+                    onPrivacyPolicyClick = {
+                        navController.navigate("privacy_policy")
+                    }
+                )
+            }
+            
+            composable("privacy_policy") {
+                PrivacyPolicyScreen(
+                    onBackClick = {
+                        navController.popBackStack()
                     }
                 )
             }
