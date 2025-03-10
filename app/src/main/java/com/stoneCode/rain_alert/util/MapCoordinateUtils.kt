@@ -78,4 +78,13 @@ object MapCoordinateUtils {
         return "-14200679.12,2500000,-7400000,6505689.94"
     }
     
+    /**
+     * Creates a bbox string specifically optimized for the Southeast US region
+     * Focuses on States like South Carolina, Georgia, etc.
+     */
+    fun getSoutheastUsBbox(): String {
+        // These bounds cover the Southeast US with better resolution
+        return "-9388876.331414394,3952459.1922547766,-8030760.680262063,4705140.487922878"
+    }
+    
 }

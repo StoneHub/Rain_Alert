@@ -199,6 +199,9 @@ private suspend fun loadBitmapFromUrl(urlString: String): Bitmap? {
 
             val input: InputStream = connection.inputStream
             val bitmap = BitmapFactory.decodeStream(input)
+            
+            // Important! Close the input stream to prevent connection leaks
+            input.close()
 
             val totalTime = System.currentTimeMillis() - startTime
             Log.d("WeatherOverlay", "Total bitmap load time: ${totalTime}ms")

@@ -380,26 +380,27 @@ private fun FullscreenMapView(
         
         // Map container
         Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
+        modifier = Modifier
+        .weight(1f)
+        .fillMaxWidth()
         ) {
-            // Map content
-            MapContent(
-                cameraPositionState = cameraPositionState,
-                myLocation = myLocation,
-                selectedStations = selectedStations,
-                showTriangleLayer = showTriangleLayer,
-                onMarkerClick = onMarkerClick,
-                activeLayer = activeLayer,
-                precipitationRadarUrl = precipitationRadarUrl,
-                windRadarUrl = windRadarUrl,
-                temperatureRadarUrl = temperatureRadarUrl,
-                onMapLoaded = {
-                    Log.d("SharedMapComponent", "Map loaded in fullscreen mode")
-                },
-                fullScreen = true
-            )
+        // Map content
+        MapContent(
+        cameraPositionState = cameraPositionState,
+        myLocation = myLocation,
+        selectedStations = selectedStations,
+        showTriangleLayer = showTriangleLayer,
+        onMarkerClick = onMarkerClick,
+        activeLayer = activeLayer,
+        precipitationRadarUrl = precipitationRadarUrl,
+        windRadarUrl = windRadarUrl,
+        temperatureRadarUrl = temperatureRadarUrl,
+        onMapLoaded = {
+        Log.d("SharedMapComponent", "Map loaded in fullscreen mode")
+        },
+        fullScreen = true,
+            showDiagnostics = true // Enable diagnostics to troubleshoot overlay issues
+        )
             
             // Map control buttons
             Box(
@@ -484,7 +485,8 @@ private fun CarouselMapView(
             onMapLoaded = {
                 Log.d("SharedMapComponent", "Map loaded in carousel mode")
             },
-            fullScreen = false
+            fullScreen = false,
+            showDiagnostics = true // Enable diagnostics to troubleshoot overlay issues
         )
         
         // Loading overlay

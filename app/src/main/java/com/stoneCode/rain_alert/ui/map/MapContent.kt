@@ -34,7 +34,8 @@ fun MapContent(
     windRadarUrl: String?,
     temperatureRadarUrl: String?,
     onMapLoaded: () -> Unit,
-    fullScreen: Boolean
+    fullScreen: Boolean,
+    showDiagnostics: Boolean = false
 ) {
     GoogleMap(
         modifier = Modifier.fillMaxSize(),
@@ -63,8 +64,9 @@ fun MapContent(
             WeatherOverlay(
                 imageUrl = temperatureRadarUrl,
                 visible = true,
-                transparency = 0.4f,
-                zIndex = 0f
+                transparency = 0.3f,
+                zIndex = 0f,
+                showDiagnostics = showDiagnostics
             )
         }
         
@@ -73,8 +75,9 @@ fun MapContent(
             WeatherOverlay(
                 imageUrl = precipitationRadarUrl,
                 visible = true,
-                transparency = 0.5f, // Increased from 0.3f for better visibility
-                zIndex = 1f
+                transparency = 0.2f, // Decreased from 0.5f for better visibility (less transparency)
+                zIndex = 1f,
+                showDiagnostics = showDiagnostics
             )
         }
         
@@ -83,8 +86,9 @@ fun MapContent(
             WeatherOverlay(
                 imageUrl = windRadarUrl,
                 visible = true,
-                transparency = 0.4f,
-                zIndex = 2f
+                transparency = 0.3f,
+                zIndex = 2f,
+                showDiagnostics = showDiagnostics
             )
         }
         

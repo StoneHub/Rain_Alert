@@ -160,9 +160,15 @@ class RadarMapRepository {
         val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:00", java.util.Locale.US)
         val validTime = dateFormat.format(calendar.time)
         
+        // Check if this is a precipitation layer request
+        val isPrecipitationLayer = layer.contains("qpf")
+        
         // Calculate bbox from the current map view or use a default
         val bbox = if (mapBounds != null) {
             MapCoordinateUtils.latLngBoundsToBbox(mapBounds)
+        } else if (isPrecipitationLayer) {
+            // Use Southeast-specific bbox for precipitation to focus better on SC
+            MapCoordinateUtils.getSoutheastUsBbox()
         } else {
             MapCoordinateUtils.getDefaultUsBbox()
         }
