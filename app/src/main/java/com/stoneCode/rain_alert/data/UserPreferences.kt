@@ -82,6 +82,24 @@ class UserPreferences(private val context: Context) {
         .map { preferences ->
             preferences[AppConfig.SELECTED_STATION_IDS_KEY] ?: emptySet()
         }
+        
+    // Get preference for multi-station approach
+    val preferMultiStationApproach: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[AppConfig.PREFER_MULTI_STATION_KEY] ?: true
+        }
+    
+    // Get minimum stations required
+    val minimumStationsRequired: Flow<Int> = context.dataStore.data
+        .map { preferences ->
+            preferences[AppConfig.MIN_STATIONS_REQUIRED_KEY] ?: 3
+        }
+    
+    // Get maximum station distance
+    val maxStationDistance: Flow<Double> = context.dataStore.data
+        .map { preferences ->
+            preferences[AppConfig.MAX_STATION_DISTANCE_KEY] ?: 50.0
+        }
 
     // Update freeze threshold
     suspend fun updateFreezeThreshold(threshold: Double) {
@@ -161,6 +179,27 @@ class UserPreferences(private val context: Context) {
     suspend fun updateSelectedStationIds(stationIds: Set<String>) {
         context.dataStore.edit { preferences ->
             preferences[AppConfig.SELECTED_STATION_IDS_KEY] = stationIds
+        }
+    }
+    
+    // Update preference for multi-station approach
+    suspend fun updatePreferMultiStationApproach(prefer: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[AppConfig.PREFER_MULTI_STATION_KEY] = prefer
+        }
+    }
+    
+    // Update minimum stations required
+    suspend fun updateMinimumStationsRequired(count: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[AppConfig.MIN_STATIONS_REQUIRED_KEY] = count
+        }
+    }
+    
+    // Update maximum station distance
+    suspend fun updateMaxStationDistance(distance: Double) {
+        context.dataStore.edit { preferences ->
+            preferences[AppConfig.MAX_STATION_DISTANCE_KEY] = distance
         }
     }
 }

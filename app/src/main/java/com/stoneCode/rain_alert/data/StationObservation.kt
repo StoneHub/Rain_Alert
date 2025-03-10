@@ -18,6 +18,7 @@ data class StationObservation(
 ) {
     /**
      * Determine if this observation indicates rain
+     * Enhanced version with improved detection capabilities
      */
     fun isRaining(): Boolean {
         // Rain is indicated by precipitation or by textual description
@@ -25,10 +26,17 @@ data class StationObservation(
             return true
         }
         
+        // Enhanced detection using relative humidity and text
+        if (relativeHumidity != null && relativeHumidity > 95 && 
+            (textDescription?.lowercase()?.contains("overcast") == true || 
+             textDescription?.lowercase()?.contains("fog") == true)) {
+            return true
+        }
+        
         // Check text description for rain indicators
         val rainIndicators = listOf(
             "rain", "shower", "drizzle", "thunderstorm", 
-            "precipitation", "precip", "wet"
+            "precipitation", "precip", "wet", "mist"
         )
         
         textDescription?.lowercase()?.let { desc ->

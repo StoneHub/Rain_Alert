@@ -41,4 +41,9 @@ object AppConfig {
     val CUSTOM_LOCATION_ZIP_KEY = stringPreferencesKey("custom_location_zip")
     val USE_CUSTOM_LOCATION_KEY = booleanPreferencesKey("use_custom_location")
     val SELECTED_STATION_IDS_KEY = stringSetPreferencesKey("selected_station_ids")
+    
+    // Algorithm settings keys
+    val PREFER_MULTI_STATION_KEY = booleanPreferencesKey("prefer_multi_station")
+    val MIN_STATIONS_REQUIRED_KEY = intPreferencesKey("min_stations_required")
+    val MAX_STATION_DISTANCE_KEY = doublePreferencesKey("max_station_distance")
 }

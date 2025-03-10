@@ -80,13 +80,17 @@ class FeedbackActivity : AppCompatActivity() {
         val actualConditionsEditText = findViewById<EditText>(R.id.actualConditionsEditText)
         val actualConditions = actualConditionsEditText.text.toString().trim()
         
+        // Get algorithm data if available
+        val algorithmData = intent.getSerializableExtra(AlertFeedbackManager.EXTRA_ALGORITHM_DATA) as? HashMap<String, Any?>
+        
         // Record the feedback
         alertFeedbackManager.recordFeedback(
             alertId = alertId!!,
             alertType = alertType!!,
             accuracyScore = accuracyScore,
             feedback = if (feedbackText.isNotEmpty()) feedbackText else null,
-            actualConditionsDescription = if (actualConditions.isNotEmpty()) actualConditions else null
+            actualConditionsDescription = if (actualConditions.isNotEmpty()) actualConditions else null,
+            algorithmData = algorithmData
         )
         
         // Thank the user and close the activity

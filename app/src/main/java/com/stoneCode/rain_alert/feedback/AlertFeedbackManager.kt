@@ -53,7 +53,7 @@ class AlertFeedbackManager private constructor(private val context: Context) {
      * Schedules a feedback request for an alert that was previously triggered
      * Will request feedback after a delay to allow the user to experience the actual weather
      */
-    fun scheduleFeedbackRequest(alertId: String, delayMinutes: Int = 30) {
+    fun scheduleFeedbackRequest(alertId: String, delayMinutes: Int = 30, algorithmData: Map<String, Any?>? = null) {
         val alertType = sharedPreferences.getString("$alertId:type", null) ?: return
         val timestamp = sharedPreferences.getLong("$alertId:timestamp", 0)
         if (timestamp == 0L) return
@@ -67,24 +67,27 @@ class AlertFeedbackManager private constructor(private val context: Context) {
         
         if (currentTime >= notificationTime) {
             // If the delay has already passed, send the notification immediately
-            sendFeedbackNotification(alertId, alertType)
+            sendFeedbackNotification(alertId, alertType, algorithmData)
         } else {
             // TODO: For a complete implementation, use WorkManager to schedule this notification
             // This is a simple version that just logs the intent to request feedback later
             Log.d(TAG, "Would schedule feedback request for alert $alertId in $delayMinutes minutes")
             
             // For demonstration purposes, we'll just send it now
-            sendFeedbackNotification(alertId, alertType)
+            sendFeedbackNotification(alertId, alertType, algorithmData)
         }
     }
 
     /**
      * Sends a notification asking the user for feedback on an alert's accuracy
      */
-    private fun sendFeedbackNotification(alertId: String, alertType: String) {
+    private fun sendFeedbackNotification(alertId: String, alertType: String, algorithmData: Map<String, Any?>? = null) {
         val intent = Intent(context, FeedbackActivity::class.java).apply {
             putExtra(EXTRA_ALERT_ID, alertId)
             putExtra(EXTRA_ALERT_TYPE, alertType)
+            algorithmData?.let {
+                putExtra(EXTRA_ALGORITHM_DATA, HashMap(it))
+            }
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         
@@ -128,7 +131,8 @@ class AlertFeedbackManager private constructor(private val context: Context) {
         alertType: String,
         accuracyScore: Int, 
         feedback: String? = null,
-        actualConditionsDescription: String? = null
+        actualConditionsDescription: String? = null,
+        algorithmData: Map<String, Any?>? = null
     ) {
         // Mark that feedback has been provided
         sharedPreferences.edit().apply {
@@ -142,8 +146,14 @@ class AlertFeedbackManager private constructor(private val context: Context) {
         FirebaseLogger.getInstance().logAlertFeedback(
             alertId = alertId,
             alertType = alertType,
-            accuracyScore = accuracyScore,
-            hasFeedbackText = !feedback.isNullOrBlank()
+            wasAccurate = accuracyScore >= 3, // Convert score to boolean (3+ is accurate)
+            userComments = feedback,
+            stationCount = algorithmData?.get("stationCount") as? Int,
+            weightedPercentage = algorithmData?.get("weightedPercentage") as? Double,
+            maxDistance = algorithmData?.get("maxDistance") as? Double,
+            usedMultiStationApproach = algorithmData?.get("usedMultiStationApproach") as? Boolean ?: false,
+            thresholdUsed = algorithmData?.get("thresholdUsed") as? Double,
+            confidenceScore = algorithmData?.get("confidenceScore") as? Float
         )
         
         // Store in Firestore for detailed analysis
@@ -153,7 +163,8 @@ class AlertFeedbackManager private constructor(private val context: Context) {
                     alertId = alertId,
                     accuracyScore = accuracyScore,
                     feedback = feedback,
-                    actualConditionsDescription = actualConditionsDescription
+                    actualConditionsDescription = actualConditionsDescription,
+                    algorithmData = algorithmData
                 )
                 Log.d(TAG, "Recorded feedback for alert $alertId with score $accuracyScore")
             } catch (e: Exception) {
@@ -191,6 +202,7 @@ class AlertFeedbackManager private constructor(private val context: Context) {
         private const val FEEDBACK_PREFS = "feedback_preferences"
         const val EXTRA_ALERT_ID = "alert_id"
         const val EXTRA_ALERT_TYPE = "alert_type"
+        const val EXTRA_ALGORITHM_DATA = "algorithm_data"
         
         @Volatile
         private var instance: AlertFeedbackManager? = null

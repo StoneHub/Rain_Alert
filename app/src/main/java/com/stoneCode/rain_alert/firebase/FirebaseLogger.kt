@@ -175,24 +175,66 @@ class FirebaseLogger private constructor() {
 
     /**
      * Log user feedback about alert accuracy
+     * Enhanced version with detailed algorithm data for analysis
      */
     fun logAlertFeedback(
         alertId: String, 
         alertType: String,
-        accuracyScore: Int, 
-        hasFeedbackText: Boolean
+        wasAccurate: Boolean, 
+        userComments: String? = null,
+        stationCount: Int? = null,
+        weightedPercentage: Double? = null,
+        maxDistance: Double? = null,
+        usedMultiStationApproach: Boolean = false,
+        thresholdUsed: Double? = null,
+        confidenceScore: Float? = null
     ) {
         try {
             val bundle = Bundle().apply {
                 putString("alert_id", alertId)
                 putString("alert_type", alertType)
-                putInt("accuracy_score", accuracyScore)
-                putBoolean("has_feedback_text", hasFeedbackText)
+                putBoolean("was_accurate", wasAccurate)
+                putBoolean("has_feedback_text", userComments != null)
                 putString("algorithm_version", ALGORITHM_VERSION)
                 putLong("feedback_time", System.currentTimeMillis())
+                
+                // Add algorithm details for analysis
+                stationCount?.let { putInt("station_count", it) }
+                weightedPercentage?.let { putDouble("weighted_percentage", it) }
+                maxDistance?.let { putDouble("max_distance", it) }
+                putBoolean("used_multi_station", usedMultiStationApproach)
+                thresholdUsed?.let { putDouble("threshold_used", it) }
+                confidenceScore?.let { putFloat("confidence_score", it) }
             }
             firebaseAnalytics.logEvent("alert_feedback", bundle)
-            Log.d(TAG, "Logged alert feedback: score=$accuracyScore for $alertType alert")
+            Log.d(TAG, "Logged alert feedback: accurate=$wasAccurate for $alertType alert")
+            
+            // Also save to Firestore for detailed analysis
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val feedbackData = hashMapOf(
+                "alertId" to alertId,
+                "alertType" to alertType,
+                "wasAccurate" to wasAccurate,
+                "userComments" to userComments,
+                "timestamp" to System.currentTimeMillis(),
+                "algorithmVersion" to ALGORITHM_VERSION,
+                "stationCount" to stationCount,
+                "weightedPercentage" to weightedPercentage,
+                "maxDistance" to maxDistance,
+                "usedMultiStationApproach" to usedMultiStationApproach,
+                "thresholdUsed" to thresholdUsed,
+                "confidenceScore" to confidenceScore
+            )
+            
+            db.collection("alert_feedback")
+                .document(alertId)
+                .set(feedbackData)
+                .addOnSuccessListener { 
+                    Log.d(TAG, "Feedback saved to Firestore successfully") 
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Error saving feedback to Firestore", e)
+                }
         } catch (e: Exception) {
             Log.e(TAG, "Error logging alert feedback: ${e.message}")
         }

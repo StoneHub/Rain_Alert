@@ -172,6 +172,92 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             
+            // Algorithm Settings Section
+            Text(
+                text = "Algorithm Settings",
+                style = MaterialTheme.typography.titleLarge
+            )
+            
+            // Multi-station approach preference
+            var preferMultiStation by remember { mutableStateOf(true) }
+            var minStations by remember { mutableStateOf(3) }
+            var maxDistance by remember { mutableStateOf(50.0) }
+            
+            // Load algorithm preferences
+            LaunchedEffect(Unit) {
+                userPreferences.preferMultiStationApproach.first().let {
+                    preferMultiStation = it
+                }
+                userPreferences.minimumStationsRequired.first().let {
+                    minStations = it
+                }
+                userPreferences.maxStationDistance.first().let {
+                    maxDistance = it
+                }
+            }
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Prefer multi-station approach")
+                Switch(
+                    checked = preferMultiStation,
+                    onCheckedChange = { newValue -> 
+                        preferMultiStation = newValue
+                        coroutineScope.launch {
+                            userPreferences.updatePreferMultiStationApproach(preferMultiStation)
+                            Log.d("SettingsScreen", "Updated preferMultiStation=$preferMultiStation")
+                            
+                            // Log to Firebase when a setting changes
+                            firebaseLogger.logSettingsChanged(
+                                freezeThreshold = freezeThreshold,
+                                rainProbabilityThreshold = rainProbabilityThreshold,
+                                enableRainNotifications = enableRainNotifications,
+                                enableFreezeNotifications = enableFreezeNotifications,
+                                useCustomSounds = customSounds,
+                                freezeDurationHours = freezeDurationHours
+                            )
+                        }
+                    }
+                )
+            }
+            
+            // Minimum stations slider
+            Text("Minimum required stations: $minStations")
+            Slider(
+                value = minStations.toFloat(),
+                onValueChange = { newValue -> 
+                    minStations = newValue.toInt()
+                    coroutineScope.launch {
+                        userPreferences.updateMinimumStationsRequired(minStations)
+                        Log.d("SettingsScreen", "Updated minStations=$minStations")
+                    }
+                },
+                valueRange = 1f..10f,
+                steps = 8,
+                modifier = Modifier.fillMaxWidth()
+            )
+            
+            // Max station distance slider
+            Text("Maximum station distance: ${String.format("%.1f", maxDistance)} km")
+            Slider(
+                value = maxDistance.toFloat(),
+                onValueChange = { newValue -> 
+                    maxDistance = newValue.toDouble()
+                    coroutineScope.launch {
+                        userPreferences.updateMaxStationDistance(maxDistance)
+                        Log.d("SettingsScreen", "Updated maxDistance=$maxDistance")
+                    }
+                },
+                valueRange = 10f..100f,
+                steps = 9,
+                modifier = Modifier.fillMaxWidth()
+            )
+            
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            
             Text(
                 text = "Notifications",
                 style = MaterialTheme.typography.titleLarge

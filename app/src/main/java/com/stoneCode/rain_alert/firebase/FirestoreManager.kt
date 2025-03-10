@@ -135,16 +135,25 @@ class FirestoreManager private constructor() {
         alertId: String,
         accuracyScore: Int, // 1-5 scale where 5 is most accurate
         feedback: String? = null,
-        actualConditionsDescription: String? = null
+        actualConditionsDescription: String? = null,
+        algorithmData: Map<String, Any?>? = null
     ): Boolean {
         try {
             val feedbackData = hashMapOf<String, Any>(
                 "accuracyScore" to accuracyScore,
+                "wasAccurate" to (accuracyScore >= 3), // Convert to boolean for simpler queries
                 "feedbackTimestamp" to System.currentTimeMillis()
             )
             
             feedback?.let { feedbackData["accuracyFeedback"] = it }
             actualConditionsDescription?.let { feedbackData["actualConditions"] = it }
+            
+            // Add algorithm data if available
+            algorithmData?.forEach { (key, value) -> 
+                if (value != null) {
+                    feedbackData["algorithm_$key"] = value
+                }
+            }
 
             db.collection("weatherAlerts")
                 .document(alertId)
