@@ -1,5 +1,6 @@
 package com.stoneCode.rain_alert.ui
 
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -58,6 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.StoneCode.rain_alert.R
 import com.stoneCode.rain_alert.ui.dialogs.LocationDialog
@@ -66,6 +68,7 @@ import com.stoneCode.rain_alert.ui.map.MapDisplayMode
 import com.stoneCode.rain_alert.ui.map.SharedMapComponent
 import com.stoneCode.rain_alert.viewmodel.WeatherViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun MainScreen(
@@ -87,7 +90,7 @@ fun MainScreen(
     var isRefreshing by remember { mutableStateOf(false) }
     var longPressDetected by remember { mutableStateOf(false) }
     var initialContainerSize by remember { mutableStateOf(0.dp) }
-    
+
     // Help dialog state
     var showHelpDialog by remember { mutableStateOf(false) }
 
@@ -122,7 +125,21 @@ fun MainScreen(
             }
         }
     }
-    
+
+    // Ensure we have location data when the screen is shown
+    LaunchedEffect(Unit) {
+        // Trigger location update when the screen is shown
+        if (weatherViewModel.getLastKnownLocation() == null) {
+            weatherViewModel.viewModelScope.launch {
+                try {
+                    weatherViewModel.updateWeatherStatus()
+                } catch (e: Exception) {
+                    Log.e("MainScreen", "Failed to get location: ${e.message}")
+                }
+            }
+        }
+    }
+
     // Help Dialog
     if (showHelpDialog) {
         HelpDialog(
@@ -153,7 +170,7 @@ fun MainScreen(
                     .padding(start = 8.dp)) {
                     AppTitle(compact = true)
                 }
-                
+
                 // Weather Alert Service Switch with text labels
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -169,9 +186,9 @@ fun MainScreen(
                                 imageVector = Icons.Default.WaterDrop,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp),
-                                tint = if (isServiceRunning) 
-                                    MaterialTheme.colorScheme.primary 
-                                else 
+                                tint = if (isServiceRunning)
+                                    MaterialTheme.colorScheme.primary
+                                else
                                     MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         },
@@ -188,7 +205,7 @@ fun MainScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
-                
+
                 // Navigation icons
                 Row {
                     // Help/Info button
@@ -199,7 +216,7 @@ fun MainScreen(
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
-                    
+
                     IconButton(onClick = onViewHistoryClick) {
                         Icon(
                             imageVector = Icons.Default.History,
@@ -225,7 +242,7 @@ fun MainScreen(
                 } else {
                     R.drawable.background_nature
                 }
-                
+
                 Image(
                     painter = painterResource(id = backgroundResId),
                     contentDescription = null,
@@ -242,13 +259,13 @@ fun MainScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    
+
                     // Dialog state
                     var showLocationDialog by rememberSaveable { mutableStateOf(false) }
                     var showStationSelectDialog by rememberSaveable { mutableStateOf(false) }
                     val availableStations by weatherViewModel.availableStations.observeAsState(emptyList())
                     val selectedStationIds by weatherViewModel.selectedStationIds.observeAsState(emptyList())
-                    
+
                     // Launch effect to fetch fresh stations when dialog is about to show
                     LaunchedEffect(showStationSelectDialog) {
                         if (showStationSelectDialog) {
@@ -256,12 +273,12 @@ fun MainScreen(
                             weatherViewModel.fetchAvailableStations()
                         }
                     }
-                    
+
                     // Filter stationData to only include selected stations
                     val displayedStations = stationData.filter { stationObs ->
                         selectedStationIds.contains(stationObs.station.id)
                     }
-                    
+
                     // Weather Map Component
                     Card(
                         modifier = Modifier
@@ -279,15 +296,17 @@ fun MainScreen(
                                 modifier = Modifier.padding(16.dp, 16.dp, 16.dp, 8.dp),
                                 color = MaterialTheme.colorScheme.onSurface // Ensures good contrast in both themes
                             )
-                            
+
                             // Map container with fixed height
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(300.dp)
                             ) {
-                                // Get center from stations or use default
-                                val center = if (displayedStations.isNotEmpty()) {
+                                // Get center from current location, stations, or use default
+                                val center = weatherViewModel.getLastKnownLocation()?.let {
+                                    com.google.android.gms.maps.model.LatLng(it.latitude, it.longitude)
+                                } ?: if (displayedStations.isNotEmpty()) {
                                     val lat = displayedStations.map { it.station.latitude }.average()
                                     val lng = displayedStations.map { it.station.longitude }.average()
                                     com.google.android.gms.maps.model.LatLng(lat, lng)
@@ -295,7 +314,7 @@ fun MainScreen(
                                     // Default US center
                                     com.google.android.gms.maps.model.LatLng(40.0, -98.0)
                                 }
-                                
+
                                 // Render map component
                                 SharedMapComponent(
                                     modifier = Modifier.fillMaxSize(),
@@ -310,8 +329,16 @@ fun MainScreen(
                                     onMyLocationClick = {
                                         // Center map on user's location without refreshing data
                                         weatherViewModel.getLastKnownLocation()?.let { location ->
+                                            // Pass the location to the SharedMapComponent
+                                            val userLocation = com.google.android.gms.maps.model.LatLng(
+                                                location.latitude,
+                                                location.longitude
+                                            )
                                             // Let the SharedMapComponent handle the camera movement
                                         }
+                                    },
+                                    myLocation = weatherViewModel.getLastKnownLocation()?.let {
+                                        com.google.android.gms.maps.model.LatLng(it.latitude, it.longitude)
                                     },
                                     onToggleFullScreen = onMapClick,
                                     onChangeLocationClick = { showLocationDialog = true }
@@ -319,7 +346,7 @@ fun MainScreen(
                             }
                         }
                     }
-                    
+
                     // Station Data Component
                     Card(
                         modifier = Modifier
@@ -362,7 +389,7 @@ fun MainScreen(
                             }
                         }
                     }
-                    
+
                     // Location Dialog
                     if (showLocationDialog) {
                         LocationDialog(
@@ -377,7 +404,7 @@ fun MainScreen(
                             }
                         )
                     }
-                    
+
                     // Station Select Dialog
                     if (showStationSelectDialog) {
                         StationSelectDialog(
@@ -390,7 +417,7 @@ fun MainScreen(
                             }
                         )
                     }
-                    
+
                     // Add space at the bottom for better scrolling
                     Spacer(modifier = Modifier.height(80.dp))
                 }
@@ -439,7 +466,7 @@ fun HelpDialog(
                 )
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                
+
                 // How it works
                 SectionWithIcon(
                     icon = Icons.Default.LocationOn,
@@ -448,7 +475,7 @@ fun HelpDialog(
                 )
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                
+
                 // Required permissions
                 SectionWithIcon(
                     icon = Icons.Default.Notifications,
@@ -457,7 +484,7 @@ fun HelpDialog(
                 )
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                
+
                 // Troubleshooting
                 SectionWithIcon(
                     icon = Icons.Default.BatteryAlert,
@@ -487,9 +514,9 @@ fun HelpDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Check Permissions")
                 }
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 OutlinedButton(
                     onClick = onOpenBatterySettings,
                     modifier = Modifier.fillMaxWidth()
@@ -537,7 +564,7 @@ fun SectionWithIcon(
                 color = MaterialTheme.colorScheme.primary
             )
         }
-        
+
         Text(
             text = description,
             style = MaterialTheme.typography.bodyMedium,
